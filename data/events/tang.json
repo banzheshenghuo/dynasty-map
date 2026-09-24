@@ -1,0 +1,158 @@
+[
+ {
+  "year": 618,
+  "yearLabel": "618年",
+  "title": "李渊建唐",
+  "description": "李渊在晋阳起兵，入长安称帝，建立唐朝，时年53岁。唐朝由此开启中国历史最辉煌的时代。",
+  "location": {
+   "name": "关内道",
+   "lng": 108.9,
+   "lat": 34.3
+  },
+  "tag": "political",
+  "sig": 4
+ },
+ {
+  "year": 626,
+  "yearLabel": "626年",
+  "title": "玄武门之变",
+  "description": "李世民发动政变，杀兄弟，逼父退位，登基为唐太宗，开启\"贞观之治\"，是唐朝最著名的宫廷政变。",
+  "location": {
+   "name": "关内道",
+   "lng": 108.95,
+   "lat": 34.38
+  },
+  "tag": "political",
+  "sig": 5
+ },
+ {
+  "year": 629,
+  "yearLabel": "629年",
+  "title": "玄奘西行取经",
+  "description": "高僧玄奘孤身西行，历时17年，取回佛经657部，回国后译经74部，留下《大唐西域记》传世。",
+  "location": {
+   "name": "关内道",
+   "lng": 108.9,
+   "lat": 34.3
+  },
+  "tag": "culture",
+  "sig": 4
+ },
+ {
+  "year": 630,
+  "yearLabel": "630年",
+  "title": "贞观之治·天可汗",
+  "description": "唐太宗贞观年间政治清明，任用魏征直言，虚心纳谏，周边各族尊称\"天可汗\"，开创盛世。",
+  "location": {
+   "name": "关内道",
+   "lng": 108.9,
+   "lat": 34.3
+  },
+  "tag": "political",
+  "sig": 5
+ },
+ {
+  "year": 641,
+  "yearLabel": "641年",
+  "title": "文成公主入藏",
+  "description": "文成公主与吐蕃赞普松赞干布联姻，带去工匠农耕技术，促进汉藏文化交流，开创唐蕃和亲传统。",
+  "location": {
+   "name": "吐蕃（藩属/对峙）",
+   "lng": 91.1,
+   "lat": 29.6
+  },
+  "tag": "political",
+  "sig": 4
+ },
+ {
+  "year": 690,
+  "yearLabel": "690年",
+  "title": "武则天称帝·建周",
+  "description": "武则天废唐睿宗，自立为帝，建国号\"周\"，成为中国历史上唯一正式称帝的女皇，在位15年。",
+  "location": {
+   "name": "河南道",
+   "lng": 112.5,
+   "lat": 34.7
+  },
+  "tag": "political",
+  "sig": 5
+ },
+ {
+  "year": 712,
+  "yearLabel": "712年",
+  "title": "唐玄宗即位·开元盛世",
+  "description": "唐玄宗开元年间，国力极盛，GDP占全球约25%，长安是当时世界最大城市，万国来朝。",
+  "location": {
+   "name": "关内道",
+   "lng": 108.9,
+   "lat": 34.3
+  },
+  "tag": "political",
+  "sig": 5
+ },
+ {
+  "year": 745,
+  "yearLabel": "745年",
+  "title": "杨贵妃入宫·马嵬之变预兆",
+  "description": "杨玉环被册封贵妃，唐玄宗从此沉湎声色，政事荒疏，姐夫杨国忠弄权，为安史之乱埋下祸根。",
+  "location": {
+   "name": "关内道",
+   "lng": 108.9,
+   "lat": 34.3
+  },
+  "tag": "culture",
+  "sig": 3
+ },
+ {
+  "year": 751,
+  "yearLabel": "751年",
+  "title": "怛罗斯之战",
+  "description": "唐将高仙芝与大食（阿拉伯）在中亚怛罗斯大战，唐军战败，部分将士被俘，造纸术由此传入西方。",
+  "location": {
+   "name": "安西都护府",
+   "lng": 72,
+   "lat": 42.5
+  },
+  "tag": "military",
+  "sig": 3
+ },
+ {
+  "year": 755,
+  "yearLabel": "755年",
+  "title": "安史之乱·范阳起兵",
+  "description": "安禄山自范阳（幽州）起兵叛乱，历时8年，是唐朝由盛转衰的根本转折点。",
+  "location": {
+   "name": "范阳节度使（幽州）",
+   "lng": 116.4,
+   "lat": 39.9
+  },
+  "tag": "military",
+  "sig": 5
+ },
+ {
+  "year": 868,
+  "yearLabel": "868年",
+  "title": "《金刚经》雕版印刷",
+  "description": "现存世界最早有明确纪年（868年）的雕版印刷品，1900年于敦煌发现，现藏大英博物馆。",
+  "location": {
+   "name": "关内道",
+   "lng": 108.9,
+   "lat": 34.3
+  },
+  "tag": "culture",
+  "sig": 4
+ },
+ {
+  "year": 875,
+  "yearLabel": "875年",
+  "title": "黄巢起义",
+  "description": "黄巢领导农民起义，历时10年，攻入长安称帝，虽最终失败，但彻底动摇唐朝统治基础。",
+  "location": {
+   "name": "河南道",
+   "lng": 115,
+   "lat": 35.3
+  },
+  "tag": "military",
+  "sig": 5
+ }
+]

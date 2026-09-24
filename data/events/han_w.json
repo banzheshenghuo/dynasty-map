@@ -1,0 +1,158 @@
+[
+ {
+  "year": -206,
+  "yearLabel": "前206年",
+  "title": "刘邦入关·约法三章",
+  "description": "刘邦率先入关中，与秦地父老约法三章，废除秦苛法，深得民心，为日后建汉奠基。",
+  "location": {
+   "name": "司隶校尉部",
+   "lng": 108.9,
+   "lat": 34.3
+  },
+  "tag": "political",
+  "sig": 4
+ },
+ {
+  "year": -202,
+  "yearLabel": "前202年",
+  "title": "垓下之战·楚汉终结",
+  "description": "刘邦围项羽于垓下（今安徽灵璧），四面楚歌，霸王别姬，项羽自刎乌江，楚汉之争结束。",
+  "location": {
+   "name": "",
+   "lng": 116.9,
+   "lat": 33.4
+  },
+  "tag": "military",
+  "sig": 5
+ },
+ {
+  "year": -196,
+  "yearLabel": "前196年",
+  "title": "汉高祖平定异姓诸王",
+  "description": "刘邦陆续消灭韩信、彭越、英布等异姓诸王，巩固汉朝中央集权，但同时大封同姓诸侯王。",
+  "location": {
+   "name": "司隶校尉部",
+   "lng": 108.9,
+   "lat": 34.3
+  },
+  "tag": "political",
+  "sig": 3
+ },
+ {
+  "year": -180,
+  "yearLabel": "前180年",
+  "title": "文景之治开始",
+  "description": "汉文帝即位，推行\"无为而治\"，轻徭薄赋，与民休息，开创文景盛世，汉朝国力大增。",
+  "location": {
+   "name": "司隶校尉部",
+   "lng": 108.9,
+   "lat": 34.3
+  },
+  "tag": "political",
+  "sig": 5
+ },
+ {
+  "year": -154,
+  "yearLabel": "前154年",
+  "title": "七国之乱",
+  "description": "吴、楚等七国诸侯王以\"清君侧\"为名发动叛乱，周亚夫率军平叛，三个月内平定，加速削藩。",
+  "location": {
+   "name": "",
+   "lng": 117.2,
+   "lat": 34.3
+  },
+  "tag": "military",
+  "sig": 4
+ },
+ {
+  "year": -141,
+  "yearLabel": "前141年",
+  "title": "汉武帝即位·推恩令",
+  "description": "汉武帝刘彻即位，颁布推恩令，诸侯国被强制分割，郡国并行弊端消除，中央集权加强。",
+  "location": {
+   "name": "司隶校尉部",
+   "lng": 108.9,
+   "lat": 34.3
+  },
+  "tag": "political",
+  "sig": 5
+ },
+ {
+  "year": -134,
+  "yearLabel": "前134年",
+  "title": "罢黜百家·独尊儒术",
+  "description": "汉武帝采纳董仲舒建议，罢黜百家，独尊儒术，设太学，儒学成国家意识形态，影响中国两千年。",
+  "location": {
+   "name": "司隶校尉部",
+   "lng": 108.9,
+   "lat": 34.3
+  },
+  "tag": "culture",
+  "sig": 5
+ },
+ {
+  "year": -127,
+  "yearLabel": "前127年",
+  "title": "卫青出塞·收复河套",
+  "description": "汉将卫青率骑兵深入漠南，击败匈奴楼烦王，收复河套地区，设朔方郡，解除匈奴对长安的直接威胁。",
+  "location": {
+   "name": "",
+   "lng": 108,
+   "lat": 40.5
+  },
+  "tag": "military",
+  "sig": 4
+ },
+ {
+  "year": -119,
+  "yearLabel": "前119年",
+  "title": "霍去病封狼居胥",
+  "description": "霍去病率军深入漠北，追歼匈奴，封狼居胥山，\"封狼居胥\"成为中国武功的最高象征。",
+  "location": {
+   "name": "",
+   "lng": 106,
+   "lat": 48
+  },
+  "tag": "military",
+  "sig": 5
+ },
+ {
+  "year": -115,
+  "yearLabel": "前115年",
+  "title": "张骞通西域·开丝绸之路",
+  "description": "张骞两次出使西域，打通丝绸之路，中西方文明得以交流，汉朝确立对西域的影响力。",
+  "location": {
+   "name": "西域都护府",
+   "lng": 76,
+   "lat": 39.5
+  },
+  "tag": "economy",
+  "sig": 5
+ },
+ {
+  "year": -99,
+  "yearLabel": "前99年",
+  "title": "司马迁著《史记》",
+  "description": "史官司马迁受宫刑后忍辱负重，完成\"史家之绝唱，无韵之离骚\"——《史记》。",
+  "location": {
+   "name": "司隶校尉部",
+   "lng": 109.5,
+   "lat": 34.3
+  },
+  "tag": "culture",
+  "sig": 5
+ },
+ {
+  "year": -60,
+  "yearLabel": "前60年",
+  "title": "西域都护府设立",
+  "description": "汉宣帝设西域都护府，都护驻乌垒城，正式将西域36国纳入汉朝管辖，控制丝绸之路咽喉。",
+  "location": {
+   "name": "西域都护府",
+   "lng": 82.9,
+   "lat": 41.7
+  },
+  "tag": "political",
+  "sig": 4
+ }
+]

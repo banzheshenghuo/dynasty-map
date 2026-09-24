@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="中国历代疆域交互地图：切换朝代查看疆域轮廓与大事年表" />
+    <title>华夏疆域 · 历代演变</title>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <h1>华夏疆域</h1>
+        <span class="sub">历代疆域与大事 · 交互地图</span>
+      </div>
+      <label class="toggle" title="叠加现代中国轮廓作参照">
+        <input type="checkbox" id="modern-toggle" checked />
+        <span>现代轮廓</span>
+      </label>
+    </header>
+
+    <main class="app-main">
+      <div id="map"></div>
+      <aside id="sidebar">
+        <div id="dynasty-info"></div>
+        <div id="event-list"></div>
+      </aside>
+      <button id="drawer-btn" aria-label="打开大事年表">大事<br />年表</button>
+    </main>
+
+    <footer class="app-footer">
+      <nav id="timeline" aria-label="朝代时间轴"></nav>
+      <p class="disclaimer">
+        疆域边界为开源数据简化示意（秦为手绘示意），与谭其骧《中国历史地图集》等学术口径存在差异，仅供历史学习参考。
+      </p>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

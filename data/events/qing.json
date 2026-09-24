@@ -1,0 +1,158 @@
+[
+ {
+  "year": 1644,
+  "yearLabel": "1644年",
+  "title": "清军入关",
+  "description": "多尔衮率清军入关，入主北京，清朝开始统治中国，满汉矛盾与融合成此后270年主线。",
+  "location": {
+   "name": "直隶省（顺天府）",
+   "lng": 116.39,
+   "lat": 39.92
+  },
+  "tag": "military",
+  "sig": 5
+ },
+ {
+  "year": 1673,
+  "yearLabel": "1673年",
+  "title": "三藩之乱",
+  "description": "吴三桂在云南起兵，与耿精忠、尚可喜联合叛清，历时8年，康熙帝平定后加强中央集权。",
+  "location": {
+   "name": "云南省",
+   "lng": 102.7,
+   "lat": 25
+  },
+  "tag": "military",
+  "sig": 4
+ },
+ {
+  "year": 1689,
+  "yearLabel": "1689年",
+  "title": "《尼布楚条约》",
+  "description": "中俄签订《尼布楚条约》，以格尔必齐河和额尔古纳河为界，是中国历史上第一个平等的国际边界条约。",
+  "location": {
+   "name": "",
+   "lng": 113.7,
+   "lat": 51.5
+  },
+  "tag": "political",
+  "sig": 4
+ },
+ {
+  "year": 1696,
+  "yearLabel": "1696年",
+  "title": "康熙亲征噶尔丹",
+  "description": "康熙帝三次亲征，彻底击败准噶尔汗国噶尔丹，蒙古草原全部纳入清朝版图。",
+  "location": {
+   "name": "新疆省（1884建省）",
+   "lng": 87.6,
+   "lat": 43.8
+  },
+  "tag": "military",
+  "sig": 4
+ },
+ {
+  "year": 1755,
+  "yearLabel": "1755年",
+  "title": "乾隆平准噶尔·新疆入版图",
+  "description": "乾隆帝西征消灭准噶尔汗国，1759年平定大小和卓叛乱，新疆全境纳入清朝版图，版图达到极盛。",
+  "location": {
+   "name": "新疆省（1884建省）",
+   "lng": 87.6,
+   "lat": 43.8
+  },
+  "tag": "military",
+  "sig": 5
+ },
+ {
+  "year": 1839,
+  "yearLabel": "1839年",
+  "title": "林则徐虎门销烟",
+  "description": "林则徐在虎门销毁英国鸦片237万斤，打响禁烟运动，直接引发鸦片战争，中国近代史序幕拉开。",
+  "location": {
+   "name": "广东省",
+   "lng": 113.6,
+   "lat": 22.8
+  },
+  "tag": "political",
+  "sig": 5
+ },
+ {
+  "year": 1840,
+  "yearLabel": "1840年",
+  "title": "鸦片战争·《南京条约》",
+  "description": "英国发动鸦片战争，清朝战败，《南京条约》割香港，开五口，赔款2100万，中国半殖民化开始。",
+  "location": {
+   "name": "广东省",
+   "lng": 114.2,
+   "lat": 22.3
+  },
+  "tag": "military",
+  "sig": 5
+ },
+ {
+  "year": 1851,
+  "yearLabel": "1851年",
+  "title": "太平天国金田起义",
+  "description": "洪秀全在广西桂平金田村起义，建太平天国，历14年波及18省，死亡数千万，清朝元气大伤。",
+  "location": {
+   "name": "广西省",
+   "lng": 110.2,
+   "lat": 23.5
+  },
+  "tag": "military",
+  "sig": 5
+ },
+ {
+  "year": 1861,
+  "yearLabel": "1861年",
+  "title": "洋务运动·自强求富",
+  "description": "曾国藩、李鸿章等推行洋务运动，创办江南制造总局等，购置西洋武器，试图\"师夷长技以制夷\"。",
+  "location": {
+   "name": "江苏省",
+   "lng": 118.8,
+   "lat": 32.1
+  },
+  "tag": "economy",
+  "sig": 4
+ },
+ {
+  "year": 1894,
+  "yearLabel": "1894年",
+  "title": "甲午战争·北洋水师覆没",
+  "description": "中日甲午战争，北洋水师黄海大战全军覆没，《马关条约》割台湾赔两亿，空前民族危机。",
+  "location": {
+   "name": "奉天省（盛京）",
+   "lng": 122.2,
+   "lat": 37.5
+  },
+  "tag": "military",
+  "sig": 5
+ },
+ {
+  "year": 1898,
+  "yearLabel": "1898年",
+  "title": "戊戌变法",
+  "description": "光绪帝支持康有为变法，推行新政103天，慈禧政变镇压，谭嗣同等六君子就义，维新运动失败。",
+  "location": {
+   "name": "直隶省（顺天府）",
+   "lng": 116.39,
+   "lat": 39.92
+  },
+  "tag": "political",
+  "sig": 4
+ },
+ {
+  "year": 1900,
+  "yearLabel": "1900年",
+  "title": "义和团·八国联军",
+  "description": "八国联军侵华，占领北京，签《辛丑条约》，赔款4.5亿两，半殖民地地位最终确立。",
+  "location": {
+   "name": "直隶省（顺天府）",
+   "lng": 116.39,
+   "lat": 39.92
+  },
+  "tag": "military",
+  "sig": 5
+ }
+]
