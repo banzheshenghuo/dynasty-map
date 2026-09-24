@@ -67,6 +67,12 @@ function handleEventClick(evt) {
     onEventClick: handleEventClick,
   });
   selectEvent(evt);
+  // 窄屏抽屉模式：点地图圆点后自动弹开抽屉展示完整描述。
+  // setTimeout 是刻意的：#map 的 DOM click（关闭抽屉）在本次点击中
+  // 晚于 zrender 处理器执行，同步 add 会被同一轮点击立即覆盖
+  if (window.matchMedia('(max-width: 900px)').matches) {
+    setTimeout(() => $('#sidebar').classList.add('open'), 0);
+  }
 }
 
 function step(delta) {
@@ -95,6 +101,6 @@ async function boot() {
 boot().catch(err => {
   document.body.insertAdjacentHTML(
     'afterbegin',
-    `<div style="padding:20px;color:#e2b3b3;background:#2a1520">加载失败：${err.message}</div>`
+    `<div style="padding:20px;color:#6b2418;background:#f3ddd0">加载失败：${err.message}</div>`
   );
 });

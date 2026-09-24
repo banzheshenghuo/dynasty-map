@@ -15,17 +15,17 @@ const UP = 'https://raw.githubusercontent.com/aourednik/historical-basemaps/mast
 
 // 朝代配置：断面年份 + 政权 NAME + 呈现信息
 const DYNASTIES = [
-  { id: 'qin',    name: '秦',   en: 'Qin',          period: '前221–前207', snapshotLabel: '手绘示意（前214年前后）', color: '#8066C6',
+  { id: 'qin',    name: '秦',   en: 'Qin',          period: '前221–前207', snapshotLabel: '手绘示意（前214年前后）', color: '#6D5B8B',
     summary: '结束战国五百年分裂的首个大一统王朝。北逐匈奴取河套、修长城，南平百越设桂林与象郡，书同文、车同轨、行郡县，奠定此后两千年华夏政治的基本盘。' },
-  { id: 'han_w',  name: '西汉', en: 'Western Han',  period: '前202–公元8',  snapshotLabel: '约公元前1年',           color: '#E67E22',
+  { id: 'han_w',  name: '西汉', en: 'Western Han',  period: '前202–公元8',  snapshotLabel: '约公元前1年',           color: '#A6402F',
     summary: '开疆拓土的盛世。武帝北击匈奴、取河西四郡、凿空西域，宣帝设西域都护府将天山南北纳入版图，南并南越、西南置郡，疆域远超秦代。' },
-  { id: 'tang',   name: '唐',   en: 'Tang',         period: '618–907',     snapshotLabel: '约800年（中唐）',        color: '#CB4335',
+  { id: 'tang',   name: '唐',   en: 'Tang',         period: '618–907',     snapshotLabel: '约800年（中唐）',        color: '#AE7C2A',
     summary: '开放恢弘的黄金时代。前期灭东西突厥，设安西、北庭都护府经略西域，势力深入中亚；安史之乱后国势转衰，河西渐为吐蕃所隔（本图取中唐断面）。' },
-  { id: 'yuan',   name: '元',   en: 'Yuan',         period: '1271–1368',   snapshotLabel: '1279年（灭南宋）',       color: '#2E86C1',
+  { id: 'yuan',   name: '元',   en: 'Yuan',         period: '1271–1368',   snapshotLabel: '1279年（灭南宋）',       color: '#46708F',
     summary: '大一统王朝中疆域最辽阔者。蒙古铁骑先后灭西夏、金、大理与南宋，兼并吐蕃故地置宣政院，岭北行省直抵漠北；行省制度为明清所沿用。' },
-  { id: 'ming',   name: '明',   en: 'Ming',         period: '1368–1644',   snapshotLabel: '约1492年（中明）',       color: '#1E8449',
+  { id: 'ming',   name: '明',   en: 'Ming',         period: '1368–1644',   snapshotLabel: '约1492年（中明）',       color: '#5F7D50',
     summary: '重建汉族大一统。前期设奴儿干都司经略东北、辖乌斯藏都司囊括青藏，郑和七下西洋扬威海外；中后期边疆收缩，北界退至长城一线。' },
-  { id: 'qing',   name: '清',   en: 'Qing',         period: '1636–1912',   snapshotLabel: '约1800年（极盛）',       color: '#148F77',
+  { id: 'qing',   name: '清',   en: 'Qing',         period: '1636–1912',   snapshotLabel: '约1800年（极盛）',       color: '#3F7E76',
     summary: '最后一个大一统王朝。康雍乾百年开疆：收台湾、定漠北、平准噶尔，将新疆、西藏稳固纳入治理，奠定近代中国版图的基础。' },
 ];
 

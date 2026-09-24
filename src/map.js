@@ -2,7 +2,11 @@ import * as echarts from 'echarts';
 
 // 稳定取景框：所有朝代共用同一经纬范围，避免切换时视口跳动
 const BOUNDS = [[70, 15], [138, 57]];
-const MODERN_BORDER_ON = 'rgba(148, 163, 184, 0.55)';
+// 淡墨：现代轮廓参照线
+const MODERN_BORDER_ON = 'rgba(96, 82, 60, 0.6)';
+// 朱砂：事件圆点
+const EVENT_DOT = '#9e3d2c';
+const PAPER = '#f6eed9';
 
 let chart = null;
 let container = null;
@@ -42,11 +46,33 @@ export async function initMap(el, handlers) {
   chart = echarts.init(el);
   chart.on('click', params => {
     if (params.seriesType === 'scatter' || params.seriesType === 'effectScatter') {
+      // 点击后地图会飞行缩放到事件点，原位置的 tooltip 会悬空失真，先收起
+      chart.dispatchAction({ type: 'hideTip' });
       onEventClick?.(params.data.event);
     }
   });
   window.addEventListener('resize', () => chart.resize());
 }
+
+// 事件提示卡：全局与 series 级共用同一份配置
+const eventTooltip = () => ({
+  backgroundColor: 'rgba(252, 247, 234, 0.97)',
+  borderColor: '#c5b48c',
+  textStyle: { color: '#3b3226' },
+  confine: true,
+  padding: [10, 14],
+  // 兜底限高，防止长描述把 tooltip 顶出画布
+  extraCssText:
+    'max-height:40vh;overflow-y:auto;box-shadow:0 4px 18px rgba(80, 66, 40, 0.25);',
+  formatter: p => {
+    if (!p.data?.event) return '';
+    const e = p.data.event;
+    return `<div class="tip-year">${e.yearLabel}</div>
+            <div class="tip-title">${e.title}</div>
+            ${e.location.name ? `<div class="tip-loc">${e.location.name}</div>` : ''}
+            <div class="tip-desc">${e.description}</div>`;
+  },
+});
 
 function baseOption(dynasty, mapName) {
   return {
@@ -59,9 +85,13 @@ function baseOption(dynasty, mapName) {
       boundingCoords: BOUNDS,
       layoutCenter: ['50%', '50%'],
       layoutSize: '96%',
+      // geo 组件的 tooltip 会管辖其上 series 的提示框：show:false 会连 scatter 的
+      // 一起关掉。这里保持开启但恒返回空串——疆域/现代轮廓悬浮不弹占位名，
+      // 事件圆点的提示由 series 级 tooltip 接管（优先级高于 geo）
+      tooltip: { show: true, formatter: () => '' },
       itemStyle: {
-        areaColor: 'rgba(148, 163, 184, 0.06)',
-        borderColor: 'rgba(148, 163, 184, 0.18)',
+        areaColor: 'rgba(120, 102, 70, 0.10)',
+        borderColor: 'rgba(96, 82, 60, 0.30)',
         borderWidth: 0.5,
       },
       emphasis: { disabled: true },
@@ -78,7 +108,7 @@ function baseOption(dynasty, mapName) {
         {
           name: '__dynasty__',
           itemStyle: {
-            areaColor: rgba(dynasty.color, 0.42),
+            areaColor: rgba(dynasty.color, 0.40),
             borderColor: dynasty.color,
             borderWidth: 1.4,
           },
@@ -87,18 +117,7 @@ function baseOption(dynasty, mapName) {
     },
     tooltip: {
       trigger: 'item',
-      backgroundColor: 'rgba(21, 27, 37, 0.96)',
-      borderColor: '#2a3547',
-      textStyle: { color: '#d7dde6' },
-      confine: true,
-      formatter: p => {
-        if (p.seriesType !== 'scatter' && p.seriesType !== 'effectScatter') return '';
-        const e = p.data.event;
-        return `<div class="tip-year">${e.yearLabel}</div>
-                <div class="tip-title">${e.title}</div>
-                ${e.location.name ? `<div class="tip-loc">📍 ${e.location.name}</div>` : ''}
-                <div class="tip-desc">${e.description}</div>`;
-      },
+      ...eventTooltip(),
     },
     series: [
       {
@@ -106,8 +125,9 @@ function baseOption(dynasty, mapName) {
         type: 'scatter',
         coordinateSystem: 'geo',
         symbolSize: 9,
-        itemStyle: { color: '#0e1218', borderColor: '#e8edf4', borderWidth: 1.6 },
-        emphasis: { scale: 1.4 },
+        itemStyle: { color: EVENT_DOT, borderColor: PAPER, borderWidth: 1.6 },
+        emphasis: { scale: 1.4, itemStyle: { color: '#7e2f22' } },
+        tooltip: eventTooltip(),
         data: currentEvents.map(toPoint),
       },
       {
@@ -116,8 +136,9 @@ function baseOption(dynasty, mapName) {
         coordinateSystem: 'geo',
         symbolSize: 13,
         rippleEffect: { scale: 2.8, brushType: 'stroke' },
-        itemStyle: { color: dynasty.color, borderColor: '#fff', borderWidth: 1.5 },
+        itemStyle: { color: dynasty.color, borderColor: PAPER, borderWidth: 1.5 },
         zlevel: 2,
+        tooltip: eventTooltip(),
         data: selectedEvent ? [toPoint(selectedEvent)] : [],
       },
     ],
@@ -178,7 +199,7 @@ export function setModernVisible(visible) {
         {
           name: '__dynasty__',
           itemStyle: {
-            areaColor: rgba(currentDynasty.color, 0.42),
+            areaColor: rgba(currentDynasty.color, 0.40),
             borderColor: currentDynasty.color,
             borderWidth: 1.4,
           },
