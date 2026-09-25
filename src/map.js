@@ -136,7 +136,7 @@ function labelPoint(polys) {
 
 // 注记数据：按政区面积降序，hideOverlap 时大政区优先占位
 let divLabelData = [];
-let labelFontSize = 10;
+let labelFontSize = 12;
 
 function hideDivTip() {
   if (divTipEl) divTipEl.hidden = true;
@@ -179,7 +179,7 @@ export async function initMap(el, handlers) {
   const compact = window.matchMedia('(max-width: 900px)').matches;
   dotSize = compact ? 12 : 9;
   selSize = compact ? 15 : 13;
-  labelFontSize = compact ? 9 : 10;
+  labelFontSize = compact ? 11 : 12;
   divTipEl = document.getElementById('div-tip');
   bindDivisionHover();
   chart.on('click', params => {
