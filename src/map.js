@@ -8,7 +8,7 @@ const MODERN_BORDER_ON = 'rgba(96, 82, 60, 0.6)';
 const NEIGHBOR_BORDER_ON = 'rgba(96, 82, 60, 0.30)';
 const NEIGHBOR_FILL_ON = 'rgba(120, 102, 70, 0.05)';
 // 现代省界：淡墨实线，现行界线作底图参照，视觉上退后（墨=今）
-const PROVINCE_BORDER_ON = 'rgba(96, 82, 60, 0.30)';
+const PROVINCE_BORDER_ON = 'rgba(96, 82, 60, 0.20)';
 const PROVINCE_FILL_ON = 'rgba(120, 102, 70, 0.03)';
 // 本朝政区界（郡/州/路/府）：朱砂虚线，与事件点/印章同源（朱=史），
 // 虚线是制图学通行的历史界线符号，与现代实线形成古今双轨
