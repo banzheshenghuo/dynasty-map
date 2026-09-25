@@ -51,7 +51,10 @@ export async function initMap(el, handlers) {
       onEventClick?.(params.data.event);
     }
   });
-  window.addEventListener('resize', () => chart.resize());
+  // 用 ResizeObserver 而非 window resize：boot 后时间轴填充等布局重排
+  // 不会触发 window resize，画布若不跟随会溢出盖住底栏
+  const ro = new ResizeObserver(() => chart.resize());
+  ro.observe(el);
 }
 
 // 事件提示卡：全局与 series 级共用同一份配置
@@ -168,6 +171,8 @@ export async function showDynasty(dynasty, events) {
   }, 160);
 }
 
+let showTipTimer = null;
+
 export function selectEvent(event) {
   if (!currentDynasty) return;
   selectedEvent = event;
@@ -180,6 +185,12 @@ export function selectEvent(event) {
       { id: 'sel', data: [toPoint(event)] },
     ],
   });
+  // 飞行落定后在事件点旁重新弹出提示卡，展示完整描述
+  clearTimeout(showTipTimer);
+  showTipTimer = setTimeout(() => {
+    const idx = currentEvents.findIndex(e => e.title === event.title);
+    if (idx >= 0) chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: idx });
+  }, 620);
 }
 
 export function setModernVisible(visible) {
