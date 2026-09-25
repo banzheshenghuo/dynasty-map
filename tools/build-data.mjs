@@ -95,7 +95,33 @@ writeFileSync(`${ROOT}data/geo/modern.json`, JSON.stringify(modern));
 const [mmn, mmx] = bbox(modern);
 console.log(`geo/modern.json  lon[${mmn[0]},${mmx[0]}] lat[${mmn[1]},${mmx[1]}]`);
 
-// ── 3. 历史事件 ────────────────────────────────────────────
+// ── 3. 周边国家国界（Natural Earth，公有领域）──────────────
+// 取景框周边的现代国界做古今对照底图；中国本体用更精细的 DataV 轮廓，此处排除
+const NEIGHBORS_SRC =
+  'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson';
+const ne = await fetchJson(NEIGHBORS_SRC);
+const VIEW = [55, 5, 150, 65]; // 稍宽于地图取景框，保证视口边缘有底图上下文
+const featureBbox = f => bbox({ type: 'FeatureCollection', features: [f] });
+const neighbors = {
+  type: 'FeatureCollection',
+  features: ne.features
+    .filter(f => f.geometry && (f.properties.NAME || '') !== 'China')
+    .filter(f => {
+      const [[mnLon, mnLat], [mxLon, mxLat]] = featureBbox(f);
+      return mxLon >= VIEW[0] && mnLon <= VIEW[2] && mxLat >= VIEW[1] && mnLat <= VIEW[3];
+    })
+    .map(f => ({
+      ...f,
+      properties: { name: '__neighbors__', layer: 'neighbors', source: 'Natural Earth', country: f.properties.NAME },
+      geometry: { ...f.geometry, coordinates: roundCoords(f.geometry.coordinates, round2) },
+    })),
+};
+writeFileSync(`${ROOT}data/geo/neighbors.json`, JSON.stringify(neighbors));
+console.log(
+  `geo/neighbors.json  ${neighbors.features.length}国  ${(JSON.stringify(neighbors).length / 1024).toFixed(0)}KB`
+);
+
+// ── 4. 历史事件 ────────────────────────────────────────────
 const dataJs = await (await fetch(EVENTS_SRC)).text();
 const EVENTS = vm.runInNewContext(dataJs + '\nmodule.exports = EVENTS;', { module: { exports: {} } });
 const yearLabel = y => (y < 0 ? `前${-y}年` : `${y}年`);
@@ -122,7 +148,7 @@ for (const d of DYNASTIES) {
   console.log(`events/${d.id}.json  ${list.length}条`);
 }
 
-// ── 4. 朝代索引 ────────────────────────────────────────────
+// ── 5. 朝代索引 ────────────────────────────────────────────
 const index = DYNASTIES.map(d => ({ ...d, geoFile: `geo/${d.id}.json`, eventsFile: `events/${d.id}.json` }));
 writeFileSync(`${ROOT}data/dynasties.json`, JSON.stringify(index, null, 1));
 console.log(`dynasties.json  ${index.length}个朝代`);

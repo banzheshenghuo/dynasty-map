@@ -4,6 +4,9 @@ import * as echarts from 'echarts';
 const BOUNDS = [[70, 15], [138, 57]];
 // 淡墨：现代轮廓参照线
 const MODERN_BORDER_ON = 'rgba(96, 82, 60, 0.6)';
+// 邻国底图：更淡的墨色，衬托而不抢疆域主体
+const NEIGHBOR_BORDER_ON = 'rgba(96, 82, 60, 0.30)';
+const NEIGHBOR_FILL_ON = 'rgba(120, 102, 70, 0.05)';
 // 朱砂：事件圆点
 const EVENT_DOT = '#9e3d2c';
 const PAPER = '#f6eed9';
@@ -11,6 +14,7 @@ const PAPER = '#f6eed9';
 let chart = null;
 let container = null;
 let modernGeo = null;
+let neighborGeo = null;
 let currentDynasty = null;
 let currentEvents = [];
 let selectedEvent = null;
@@ -42,6 +46,7 @@ export async function initMap(el, handlers) {
   container = el;
   onEventClick = handlers.onEventClick;
   modernGeo = await fetchJson('geo/modern.json');
+  neighborGeo = await fetchJson('geo/neighbors.json');
 
   chart = echarts.init(el);
   chart.on('click', params => {
@@ -101,6 +106,15 @@ function baseOption(dynasty, mapName) {
       select: { disabled: true },
       regions: [
         {
+          // 邻国画在最底层：淡墨边界 + 极淡底色，随「现代国界」开关显隐
+          name: '__neighbors__',
+          itemStyle: {
+            areaColor: modernVisible ? NEIGHBOR_FILL_ON : 'transparent',
+            borderColor: modernVisible ? NEIGHBOR_BORDER_ON : 'rgba(0,0,0,0)',
+            borderWidth: 0.6,
+          },
+        },
+        {
           name: '__modern__',
           itemStyle: {
             areaColor: 'transparent',
@@ -159,7 +173,7 @@ export async function showDynasty(dynasty, events) {
   const mapName = `map_${dynasty.id}_${Date.now() % 1e6}`;
   const combined = {
     type: 'FeatureCollection',
-    features: [...geo.features, ...modernGeo.features],
+    features: [...neighborGeo.features, ...geo.features, ...modernGeo.features],
   };
   echarts.registerMap(mapName, combined);
 
@@ -199,6 +213,14 @@ export function setModernVisible(visible) {
   chart.setOption({
     geo: {
       regions: [
+        {
+          name: '__neighbors__',
+          itemStyle: {
+            areaColor: visible ? NEIGHBOR_FILL_ON : 'transparent',
+            borderColor: visible ? NEIGHBOR_BORDER_ON : 'rgba(0,0,0,0)',
+            borderWidth: 0.6,
+          },
+        },
         {
           name: '__modern__',
           itemStyle: {

@@ -59,5 +59,10 @@ const modern = JSON.parse(readFileSync(join(ROOT, 'data/geo/modern.json'), 'utf8
 if (!modern.features.some(f => f.properties?.name === '__modern__')) fail('modern.json 缺少 __modern__ 要素');
 else ok('modern.json 现代轮廓就绪');
 
+const neighbors = JSON.parse(readFileSync(join(ROOT, 'data/geo/neighbors.json'), 'utf8'));
+if (!neighbors.features.some(f => f.properties?.name === '__neighbors__')) fail('neighbors.json 缺少 __neighbors__ 要素');
+else if (neighbors.features.some(f => f.properties?.country === 'China')) fail('neighbors.json 不应包含中国本体');
+else ok('neighbors.json 邻国底图就绪（' + neighbors.features.length + ' 国');
+
 if (errors) { console.error(`\n共 ${errors} 个问题`); process.exit(1); }
 console.log('\n数据自检全部通过');
