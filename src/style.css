@@ -59,6 +59,9 @@ body {
 /* 抽屉把手：仅移动端抽屉形态显示 */
 .drawer-grip { display: none; }
 
+/* 移动端事件卡（底部浮层）：桌面不渲染 */
+#event-card { display: none; }
+
 /* ── 顶栏：卷首 ───────────────────────── */
 .app-header {
   display: flex;
@@ -339,11 +342,14 @@ body {
   .app-footer { padding-bottom: env(safe-area-inset-bottom); }
 
   /* 抽屉：把手 + 更高条目 + 安全区适配 */
+  /* 抽屉：把手 + 更高条目 + 安全区适配。
+     fixed 相对视口：translateY(105%) 才能完全滑出屏幕——
+     若锚定 .app-main 底部（footer 之上），收起后仍会露出一条盖住时间轴 */
   #sidebar {
-    position: absolute;
+    position: fixed;
     left: 0; right: 0; bottom: 0;
     width: auto;
-    max-height: 68vh;
+    max-height: 58vh;
     border-left: none;
     border-top: 1px solid var(--line);
     box-shadow: 0 -8px 28px rgba(96, 74, 38, 0.3);
@@ -394,4 +400,51 @@ body {
   }
 
   .brand .sub { display: none; }
+
+  /* 事件卡：点地图圆点后的轻量详情浮层，位于时间轴上方 */
+  #event-card {
+    display: block;
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: calc(122px + env(safe-area-inset-bottom));
+    z-index: 25;
+    background: var(--paper-light);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 8px 26px rgba(96, 74, 38, 0.32);
+    padding: 12px 40px 13px 14px;
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+  }
+  #event-card.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  #card-close {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: none;
+    color: var(--ink-faint);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .card-head { display: flex; align-items: baseline; gap: 8px; }
+  .card-year { font-size: 12px; font-weight: 600; color: var(--dyn-color, var(--cinnabar)); font-variant-numeric: tabular-nums; }
+  .card-loc { font-size: 11px; color: var(--ink-faint); }
+  .card-title {
+    font-family: var(--kai);
+    font-size: 16px;
+    letter-spacing: 1px;
+    margin: 3px 0 5px;
+  }
+  .card-desc { font-size: 12.5px; line-height: 1.7; color: #5d5240; overflow-wrap: anywhere; }
 }

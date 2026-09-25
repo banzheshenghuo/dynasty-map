@@ -30,6 +30,18 @@ export function renderSidebar({ infoEl, listEl, dynasty, events, selected, onEve
     })
   );
 
+  // 选中条目滚入抽屉可视区——只能滚 #sidebar 自身。
+  // 不能用 scrollIntoView：抽屉收起时条目在视口外，它会把 body
+  // 也滚上去（overflow:hidden 仍可编程滚动），整个页面错位
   const sel = listEl.querySelector('.evt-item.selected');
-  if (sel) sel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  if (sel) {
+    const sb = sel.closest('#sidebar');
+    if (sb) {
+      const selTop = sel.getBoundingClientRect().top;
+      const sbTop = sb.getBoundingClientRect().top;
+      if (selTop < sbTop + 60 || selTop > sbTop + sb.clientHeight - 90) {
+        sb.scrollTop += selTop - sbTop - 60;
+      }
+    }
+  }
 }

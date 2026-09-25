@@ -22,6 +22,15 @@
     <main class="app-main">
       <div id="map"></div>
       <div id="map-hint" aria-hidden="true">双指缩放地图 · 点圆点看详情</div>
+      <div id="event-card">
+        <button id="card-close" aria-label="关闭事件详情">×</button>
+        <div class="card-head">
+          <span class="card-year"></span>
+          <span class="card-loc"></span>
+        </div>
+        <h3 class="card-title"></h3>
+        <p class="card-desc"></p>
+      </div>
       <aside id="sidebar">
         <div class="drawer-grip" id="drawer-grip" aria-label="收起大事年表"></div>
         <div id="dynasty-info"></div>

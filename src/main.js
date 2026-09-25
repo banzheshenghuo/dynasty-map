@@ -1,10 +1,11 @@
 import './style.css';
 import { initMap, showDynasty, selectEvent, setModernVisible, preload } from './map.js';
 import { renderTimeline, bindKeyboard } from './timeline.js';
-import { renderSidebar } from './sidebar.js';
+import { renderSidebar as renderSidebarInto } from './sidebar.js';
 
 const BASE = import.meta.env.BASE_URL;
 const $ = s => document.querySelector(s);
+const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
 
 const state = {
   dynasties: [],
@@ -28,10 +29,9 @@ async function loadEvents(dynasty) {
   return eventsCache.get(dynasty.id);
 }
 
-function render() {
+function renderSidebar() {
   const d = state.dynasties[state.currentIdx];
-  renderTimeline($('#timeline'), state.dynasties, d.id, switchDynasty);
-  renderSidebar({
+  renderSidebarInto({
     infoEl: $('#dynasty-info'),
     listEl: $('#event-list'),
     dynasty: d,
@@ -41,11 +41,18 @@ function render() {
   });
 }
 
+function render() {
+  const d = state.dynasties[state.currentIdx];
+  renderTimeline($('#timeline'), state.dynasties, d.id, switchDynasty);
+  renderSidebar();
+}
+
 async function switchDynasty(id) {
   const idx = state.dynasties.findIndex(d => d.id === id);
   if (idx < 0) return;
   state.currentIdx = idx;
   state.selected = null;
+  hideEventCard();
   const d = state.dynasties[idx];
   state.events = await loadEvents(d);
   render();
@@ -55,23 +62,43 @@ async function switchDynasty(id) {
   if (next) preload(next);
 }
 
-function handleEventClick(evt) {
+// 移动端事件卡：点地图圆点后的轻量详情浮层（抽屉的替代展示，不挡地图与时间轴）
+function showEventCard(evt) {
+  const card = $('#event-card');
+  const d = state.dynasties[state.currentIdx];
+  card.querySelector('.card-year').textContent = evt.yearLabel;
+  card.querySelector('.card-year').style.color = d.color;
+  card.querySelector('.card-loc').textContent = evt.location.name || '';
+  card.querySelector('.card-title').textContent = evt.title;
+  card.querySelector('.card-desc').textContent = evt.description;
+  card.classList.add('show');
+}
+
+function hideEventCard() {
+  $('#event-card').classList.remove('show');
+}
+
+function handleEventClick(evt, opts = {}) {
+  const mobile = isMobile();
+  // 抽屉浏览态：再点同一事件收起描述，不飞图
+  if (mobile && !opts.fromMap && state.selected && state.selected.title === evt.title) {
+    state.selected = null;
+    renderSidebar();
+    hideEventCard();
+    return;
+  }
   state.selected = evt;
   const d = state.dynasties[state.currentIdx];
-  renderSidebar({
-    infoEl: $('#dynasty-info'),
-    listEl: $('#event-list'),
-    dynasty: d,
-    events: state.events,
-    selected: state.selected,
-    onEventClick: handleEventClick,
-  });
+  renderSidebar();
   selectEvent(evt);
-  // 窄屏抽屉模式：点地图圆点后自动弹开抽屉展示完整描述。
-  // setTimeout 是刻意的：#map 的 DOM click（关闭抽屉）在本次点击中
-  // 晚于 zrender 处理器执行，同步 add 会被同一轮点击立即覆盖
-  if (window.matchMedia('(max-width: 900px)').matches) {
-    setTimeout(() => $('#sidebar').classList.add('open'), 0);
+  if (mobile) {
+    if (opts.fromMap) {
+      // 地图圆点：收抽屉、弹事件卡——地图与时间轴保持可用
+      $('#sidebar').classList.remove('open');
+      showEventCard(evt);
+    } else {
+      hideEventCard();
+    }
   }
 }
 
@@ -88,13 +115,16 @@ async function boot() {
   $('#modern-toggle').addEventListener('change', e => setModernVisible(e.target.checked));
   bindKeyboard(() => step(-1), () => step(1));
 
-  $('#drawer-btn').addEventListener('click', () => {
-    $('#sidebar').classList.toggle('open');
-  });
-
   // 抽屉把手：点按收起
   $('#drawer-grip').addEventListener('click', () => {
     $('#sidebar').classList.remove('open');
+  });
+
+  // 事件卡关闭；打开抽屉时收起事件卡（二者互斥）
+  $('#card-close').addEventListener('click', hideEventCard);
+  $('#drawer-btn').addEventListener('click', () => {
+    hideEventCard();
+    $('#sidebar').classList.toggle('open');
   });
 
   // 移动端首屏操作提示，几秒后淡出

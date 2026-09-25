@@ -64,7 +64,7 @@ export async function initMap(el, handlers) {
     if (params.seriesType === 'scatter' || params.seriesType === 'effectScatter') {
       // 点击后地图会飞行缩放到事件点，原位置的 tooltip 会悬空失真，先收起
       chart.dispatchAction({ type: 'hideTip' });
-      onEventClick?.(params.data.event);
+      onEventClick?.(params.data.event, { fromMap: true });
     }
   });
   // 用 ResizeObserver 而非 window resize：boot 后时间轴填充等布局重排
