@@ -92,6 +92,52 @@ function findDivision(lon, lat) {
   return null;
 }
 
+// ── 政区名注记：形心定位 + labelLayout.hideOverlap 避让 ──────
+const ringArea = ring => {
+  let a = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++)
+    a += ring[i][0] * ring[j][1] - ring[j][0] * ring[i][1];
+  return Math.abs(a / 2);
+};
+
+const ringCentroid = ring => {
+  let a = 0, x = 0, y = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const c = ring[i][0] * ring[j][1] - ring[j][0] * ring[i][1];
+    a += c; x += (ring[i][0] + ring[j][0]) * c; y += (ring[i][1] + ring[j][1]) * c;
+  }
+  a *= 0.5;
+  return a ? [x / (6 * a), y / (6 * a)] : null;
+};
+
+// 形心落环外（狭长/凹多边形）时依次回退 bbox 中心、网格采样，取首个环内点
+function labelPoint(polys) {
+  let best = null, bestA = 0;
+  for (const poly of polys) {
+    const a = ringArea(poly[0]);
+    if (a > bestA) { bestA = a; best = poly; }
+  }
+  if (!best) return null;
+  const outer = best[0];
+  const xs = outer.map(p => p[0]), ys = outer.map(p => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const cands = [ringCentroid(outer), [(x0 + x1) / 2, (y0 + y1) / 2]];
+  for (let gx = 1; gx <= 5; gx++)
+    for (let gy = 1; gy <= 5; gy++)
+      cands.push([x0 + (x1 - x0) * gx / 6, y0 + (y1 - y0) * gy / 6]);
+  for (const [x, y] of cands) {
+    if (x == null || !pointInRing(x, y, outer)) continue;
+    let inHole = false;
+    for (let h = 1; h < best.length; h++) if (pointInRing(x, y, best[h])) { inHole = true; break; }
+    if (!inHole) return [x, y];
+  }
+  return null;
+}
+
+// 注记数据：按政区面积降序，hideOverlap 时大政区优先占位
+let divLabelData = [];
+let labelFontSize = 10;
+
 function hideDivTip() {
   if (divTipEl) divTipEl.hidden = true;
 }
@@ -133,10 +179,15 @@ export async function initMap(el, handlers) {
   const compact = window.matchMedia('(max-width: 900px)').matches;
   dotSize = compact ? 12 : 9;
   selSize = compact ? 15 : 13;
+  labelFontSize = compact ? 9 : 10;
   divTipEl = document.getElementById('div-tip');
   bindDivisionHover();
   chart.on('click', params => {
-    if (params.seriesType === 'scatter' || params.seriesType === 'effectScatter') {
+    // div-labels 也是 scatter 但 silent 且无 event 数据，须排除
+    if (
+      (params.seriesType === 'scatter' || params.seriesType === 'effectScatter') &&
+      params.data?.event
+    ) {
       // 点击后地图会飞行缩放到事件点，原位置的 tooltip 会悬空失真，先收起
       chart.dispatchAction({ type: 'hideTip' });
       onEventClick?.(params.data.event, { fromMap: true });
@@ -243,6 +294,29 @@ function baseOption(dynasty, mapName) {
     },
     series: [
       {
+        // 政区名注记：静默（不拦截悬浮/点击），重叠自动避让，随「政区界」开关显隐
+        id: 'div-labels',
+        type: 'scatter',
+        coordinateSystem: 'geo',
+        symbolSize: 0,
+        itemStyle: { color: 'transparent' },
+        silent: true,
+        z: 1,
+        tooltip: { show: false },
+        labelLayout: { hideOverlap: true },
+        label: {
+          show: true,
+          formatter: p => p.name,
+          fontSize: labelFontSize,
+          fontFamily: "'Kaiti SC','STKaiti','KaiTi','FangSong',serif",
+          color: '#3b3226',
+          textBorderColor: 'rgba(246, 238, 217, 0.85)',
+          textBorderWidth: 2,
+        },
+        emphasis: { disabled: true },
+        data: divLabelData,
+      },
+      {
         id: 'evt',
         type: 'scatter',
         coordinateSystem: 'geo',
@@ -279,6 +353,16 @@ export async function showDynasty(dynasty, events, view = {}) {
     type: f.properties.type,
     polys: f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates,
   }));
+  divLabelData = divisionsVisible
+    ? divisionRings
+        .map(d => ({ d, area: Math.max(...d.polys.map(p => ringArea(p[0]))) }))
+        .sort((a, b) => b.area - a.area)
+        .map(({ d }) => {
+          const p = labelPoint(d.polys);
+          return p ? { name: d.name, value: p } : null;
+        })
+        .filter(Boolean)
+    : [];
   currentDynasty = dynasty;
   currentEvents = events;
   selectedEvent = null;
