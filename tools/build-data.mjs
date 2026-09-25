@@ -1,25 +1,27 @@
 #!/usr/bin/env node
 /**
  * 数据构建管线：从开放数据源生成 data/ 目录
- *  - 疆域轮廓：aourednik/historical-basemaps (GPL-3)，按断面提取中国政权多边形
- *  - 秦疆域：手绘示意（data/geo/qin.json 为静态文件，本脚本跳过）
+ *  - 疆域轮廓：aourednik/historical-basemaps (GPL-3) 边疆断面 ∪ CHGIS V6/Hartwell
+ *    本部政区并集（海岸线精确贴合，经 china-history-map 导出）
+ *  - 秦疆域：手绘示意 + CHGIS 秦郡并集（无 aourednik 断面）
  *  - 现代轮廓：阿里 DataV
  *  - 历史事件：筛选自 pessimistcamellia/china-history-map 的 EVENTS（公版史料整理）
  * 用法：node tools/build-data.mjs
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import polygonClipping from 'polygon-clipping';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const UP = 'https://raw.githubusercontent.com/aourednik/historical-basemaps/master/geojson';
 
 // 朝代配置：断面年份 + 政权 NAME + 呈现信息
 const DYNASTIES = [
-  { id: 'qin',    name: '秦',   en: 'Qin',          period: '前221–前207', snapshotLabel: '手绘示意（前214年前后）', color: '#6D5B8B',
+  { id: 'qin',    name: '秦',   en: 'Qin',          period: '前221–前207', snapshotLabel: '约前214年（手绘+CHGIS秦郡）', color: '#6D5B8B',
     summary: '结束战国五百年分裂的首个大一统王朝。北逐匈奴取河套、修长城，南平百越设桂林与象郡，书同文、车同轨、行郡县，奠定此后两千年华夏政治的基本盘。' },
   { id: 'han_w',  name: '西汉', en: 'Western Han',  period: '前202–公元8',  snapshotLabel: '约公元前1年',           color: '#A6402F',
     summary: '开疆拓土的盛世。武帝北击匈奴、取河西四郡、凿空西域，宣帝设西域都护府将天山南北纳入版图，南并南越、西南置郡，疆域远超秦代。' },
-  { id: 'tang',   name: '唐',   en: 'Tang',         period: '618–907',     snapshotLabel: '约800年（中唐）',        color: '#AE7C2A',
+  { id: 'tang',   name: '唐',   en: 'Tang',         period: '618–907',     snapshotLabel: '开元政区并中唐边疆（约741–800）',        color: '#AE7C2A',
     summary: '开放恢弘的黄金时代。前期灭东西突厥，设安西、北庭都护府经略西域，势力深入中亚；安史之乱后国势转衰，河西渐为吐蕃所隔（本图取中唐断面）。' },
   { id: 'yuan',   name: '元',   en: 'Yuan',         period: '1271–1368',   snapshotLabel: '1279年（灭南宋）',       color: '#46708F',
     summary: '大一统王朝中疆域最辽阔者。蒙古铁骑先后灭西夏、金、大理与南宋，兼并吐蕃故地置宣政院，岭北行省直抵漠北；行省制度为明清所沿用。' },
@@ -47,13 +49,18 @@ const round3 = n => Math.round(n * 1000) / 1000;
 const roundCoords = (c, r) => (typeof c[0] === 'number' ? [r(c[0]), r(c[1])] : c.map(x => roundCoords(x, r)));
 
 async function fetchJson(url) {
+  // raw.githubusercontent 间歇超时，用 jsdelivr gh 镜像兜底（同内容）
+  const mirror = url.replace('https://raw.githubusercontent.com/', 'https://cdn.jsdelivr.net/gh/').replace('/master/', '@master/').replace('/main/', '@main/');
+  const urls = mirror === url ? [url] : [url, mirror];
   let lastErr;
-  for (let i = 0; i < 3; i++) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 2000 * (i + 1))); }
+  for (const u of urls) {
+    for (let i = 0; i < 3; i++) {
+      try {
+        const res = await fetch(u, { signal: AbortSignal.timeout(30000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 2000 * (i + 1))); }
+    }
   }
   throw new Error(`fetch 失败 ${url}: ${lastErr.message}`);
 }
@@ -71,18 +78,58 @@ mkdirSync(`${ROOT}data/geo`, { recursive: true });
 mkdirSync(`${ROOT}data/events`, { recursive: true });
 
 // ── 1. 疆域轮廓 ────────────────────────────────────────────
-for (const [id, cfg] of Object.entries(GEO_SRC)) {
-  const world = await fetchJson(cfg.file);
-  const feats = world.features.filter(f => cfg.regime.test(f.properties.NAME || ''));
-  if (!feats.length) throw new Error(`${id}: 断面中未找到政权 ${cfg.regime}`);
-  feats.forEach(f => {
-    f.properties = { name: '__dynasty__', layer: 'dynasty', source: 'historical-basemaps' };
-    f.geometry.coordinates = roundCoords(f.geometry.coordinates, round2);
-  });
-  const out = { type: 'FeatureCollection', features: feats };
+// 疆域 = 边疆轮廓 ∪ 本部政区并集：
+//  - 边疆轮廓（西域都护府/漠北/藩部等）：aourednik/historical-basemaps 世界断面
+//  - 本部政区（郡/州/路/府，海岸线精确贴合）：CHGIS V6 + Hartwell 政区快照，
+//    经 pessimistcamellia/china-history-map 导出为 GeoJSON；数据偏东南（方志数字化进度），
+//    缺失区域由边疆轮廓兜底，几何并集后无痕
+//  - 秦无 aourednik 断面，以仓库手绘轮廓为底
+const POLY_SRC = id =>
+  `https://raw.githubusercontent.com/pessimistcamellia/china-history-map/main/v2/data/geo/${id}.json`;
+const toMulti = g => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates);
+function unionAll(parts) {
+  let u = null;
+  for (const coords of parts) {
+    try { u = u ? polygonClipping.union(u, coords) : coords; } catch { /* 脏多边形跳过 */ }
+  }
+  return u;
+}
+
+for (const d of DYNASTIES) {
+  const id = d.id;
+  const parts = [];
+  let srcNote = [];
+  if (GEO_SRC[id]) {
+    const world = await fetchJson(GEO_SRC[id].file);
+    const feats = world.features.filter(f => GEO_SRC[id].regime.test(f.properties.NAME || ''));
+    if (!feats.length) throw new Error(`${id}: 断面中未找到政权 ${GEO_SRC[id].regime}`);
+    feats.forEach(f => parts.push(roundCoords(toMulti(f.geometry), round2)));
+    srcNote.push('historical-basemaps');
+  } else {
+    // 秦：手绘示意轮廓（静态文件）
+    const hand = JSON.parse(readFileSync(`${ROOT}data/geo/${id}.json`, 'utf8'));
+    hand.features.forEach(f => parts.push(roundCoords(toMulti(f.geometry), round2)));
+    srcNote.push('手绘示意');
+  }
+  const polys = await fetchJson(POLY_SRC(id)).catch(() => null);
+  let nPref = 0;
+  if (polys?.features?.length) {
+    polys.features.forEach(f => { parts.push(roundCoords(toMulti(f.geometry), round2)); nPref++; });
+    srcNote.push('CHGIS/Hartwell');
+  }
+  const union = unionAll(parts);
+  if (!union) throw new Error(`${id}: 并集结果为空`);
+  const out = {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      properties: { name: '__dynasty__', layer: 'dynasty', source: srcNote.join(' + ') },
+      geometry: { type: 'MultiPolygon', coordinates: roundCoords(union, round2) },
+    }],
+  };
   writeFileSync(`${ROOT}data/geo/${id}.json`, JSON.stringify(out));
   const [mn, mx] = bbox(out);
-  console.log(`geo/${id}.json  features=${feats.length}  lon[${mn[0]},${mx[0]}] lat[${mn[1]},${mx[1]}]`);
+  console.log(`geo/${id}.json  本部政区${nPref} + 轮廓 → 并集  lon[${mn[0]},${mx[0]}] lat[${mn[1]},${mx[1]}]`);
 }
 
 // ── 2. 现代轮廓 ────────────────────────────────────────────
