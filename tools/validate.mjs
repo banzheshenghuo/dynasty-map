@@ -53,6 +53,16 @@ for (const d of dynasties) {
   }
   if (!sorted) fail(`${d.id} 事件未按年份排序`);
   ok(`${d.id} 事件 ${events.length} 条（${events[0]?.yearLabel} → ${events[events.length - 1]?.yearLabel}）`);
+  if (d.divisionsFile) {
+    const divPath = join(ROOT, 'data', d.divisionsFile);
+    if (!existsSync(divPath)) fail(`${d.id} 政区文件不存在: ${d.divisionsFile}`);
+    else {
+      const div = JSON.parse(readFileSync(divPath, 'utf8'));
+      if (!div.features?.length) fail(`${d.id} 政区文件为空`);
+      else if (div.features.some(f => !f.properties?.name)) fail(`${d.id} 政区要素缺 name`);
+      else ok(`${d.id} 政区界 ${div.features.length} 个`);
+    }
+  }
 }
 
 const modern = JSON.parse(readFileSync(join(ROOT, 'data/geo/modern.json'), 'utf8'));

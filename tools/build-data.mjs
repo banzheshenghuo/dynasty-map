@@ -116,6 +116,17 @@ for (const d of DYNASTIES) {
   if (polys?.features?.length) {
     polys.features.forEach(f => { parts.push(roundCoords(toMulti(f.geometry), round2)); nPref++; });
     srcNote.push('CHGIS/Hartwell');
+    // 本朝政区界图层：保留郡/州/路/府名与类型，供前端单独渲染与悬浮展示
+    const divisions = {
+      type: 'FeatureCollection',
+      features: polys.features.map(f => ({
+        type: 'Feature',
+        properties: { name: f.properties.name, layer: 'division', type: f.properties.type_ch || '' },
+        geometry: { type: f.geometry.type, coordinates: roundCoords(f.geometry.coordinates, round2) },
+      })),
+    };
+    writeFileSync(`${ROOT}data/geo/${id}-div.json`, JSON.stringify(divisions));
+    var nDiv = divisions.features.length;
   }
   const union = unionAll(parts);
   if (!union) throw new Error(`${id}: 并集结果为空`);
@@ -129,7 +140,7 @@ for (const d of DYNASTIES) {
   };
   writeFileSync(`${ROOT}data/geo/${id}.json`, JSON.stringify(out));
   const [mn, mx] = bbox(out);
-  console.log(`geo/${id}.json  本部政区${nPref} + 轮廓 → 并集  lon[${mn[0]},${mx[0]}] lat[${mn[1]},${mx[1]}]`);
+  console.log(`geo/${id}.json  本部政区${nPref}+政区界${nDiv ?? 0} + 轮廓 → 并集  lon[${mn[0]},${mx[0]}] lat[${mn[1]},${mx[1]}]`);
 }
 
 // ── 2. 现代轮廓 ────────────────────────────────────────────
@@ -213,6 +224,6 @@ for (const d of DYNASTIES) {
 }
 
 // ── 6. 朝代索引 ────────────────────────────────────────────
-const index = DYNASTIES.map(d => ({ ...d, geoFile: `geo/${d.id}.json`, eventsFile: `events/${d.id}.json` }));
+const index = DYNASTIES.map(d => ({ ...d, geoFile: `geo/${d.id}.json`, divisionsFile: `geo/${d.id}-div.json`, eventsFile: `events/${d.id}.json` }));
 writeFileSync(`${ROOT}data/dynasties.json`, JSON.stringify(index, null, 1));
 console.log(`dynasties.json  ${index.length}个朝代`);

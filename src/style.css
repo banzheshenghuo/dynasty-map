@@ -35,6 +35,21 @@ body {
 .tl-item, .evt-item, .toggle, #drawer-btn, .drawer-grip { touch-action: manipulation; }
 #map canvas { touch-action: none; }
 
+/* 政区悬浮纸签（自实现）：贴在 #map 内 */
+#div-tip {
+  position: absolute;
+  z-index: 12;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(252, 247, 234, 0.97);
+  border: 1px solid #c5b48c;
+  box-shadow: 0 4px 14px rgba(80, 66, 40, 0.25);
+  pointer-events: none;
+  white-space: nowrap;
+}
+#div-tip .tip-title { font-size: 13px; margin: 0; }
+#div-tip .tip-loc { margin: 2px 0 0; }
+
 /* 移动端操作提示小签（首次加载淡入淡出） */
 #map-hint {
   position: absolute;
@@ -107,6 +122,8 @@ body {
   letter-spacing: 2px;
   margin-left: 10px;
 }
+
+.toggles { display: flex; align-items: center; gap: 16px; }
 
 .toggle {
   display: flex; align-items: center; gap: 7px;
@@ -315,7 +332,8 @@ body {
   .app-header { padding: 8px 14px; }
   .brand h1 { font-size: 20px; letter-spacing: 3px; }
   .seal { width: 22px; height: 22px; font-size: 13px; margin-left: 6px; }
-  .toggle { font-size: 12.5px; padding: 8px 2px; margin-left: 8px; }
+  .toggle { font-size: 12.5px; padding: 8px 2px; margin-left: 0; }
+  .toggles { gap: 12px; }
   .toggle input { width: 17px; height: 17px; }
 
   #map { flex: 1; min-height: 0; }

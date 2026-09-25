@@ -8,6 +8,7 @@
   "color": "#6D5B8B",
   "summary": "结束战国五百年分裂的首个大一统王朝。北逐匈奴取河套、修长城，南平百越设桂林与象郡，书同文、车同轨、行郡县，奠定此后两千年华夏政治的基本盘。",
   "geoFile": "geo/qin.json",
+  "divisionsFile": "geo/qin-div.json",
   "eventsFile": "events/qin.json"
  },
  {
@@ -19,6 +20,7 @@
   "color": "#A6402F",
   "summary": "开疆拓土的盛世。武帝北击匈奴、取河西四郡、凿空西域，宣帝设西域都护府将天山南北纳入版图，南并南越、西南置郡，疆域远超秦代。",
   "geoFile": "geo/han_w.json",
+  "divisionsFile": "geo/han_w-div.json",
   "eventsFile": "events/han_w.json"
  },
  {
@@ -30,6 +32,7 @@
   "color": "#AE7C2A",
   "summary": "开放恢弘的黄金时代。前期灭东西突厥，设安西、北庭都护府经略西域，势力深入中亚；安史之乱后国势转衰，河西渐为吐蕃所隔（本图取中唐断面）。",
   "geoFile": "geo/tang.json",
+  "divisionsFile": "geo/tang-div.json",
   "eventsFile": "events/tang.json"
  },
  {
@@ -41,6 +44,7 @@
   "color": "#46708F",
   "summary": "大一统王朝中疆域最辽阔者。蒙古铁骑先后灭西夏、金、大理与南宋，兼并吐蕃故地置宣政院，岭北行省直抵漠北；行省制度为明清所沿用。",
   "geoFile": "geo/yuan.json",
+  "divisionsFile": "geo/yuan-div.json",
   "eventsFile": "events/yuan.json"
  },
  {
@@ -52,6 +56,7 @@
   "color": "#5F7D50",
   "summary": "重建汉族大一统。前期设奴儿干都司经略东北、辖乌斯藏都司囊括青藏，郑和七下西洋扬威海外；中后期边疆收缩，北界退至长城一线。",
   "geoFile": "geo/ming.json",
+  "divisionsFile": "geo/ming-div.json",
   "eventsFile": "events/ming.json"
  },
  {
@@ -63,6 +68,7 @@
   "color": "#3F7E76",
   "summary": "最后一个大一统王朝。康雍乾百年开疆：收台湾、定漠北、平准噶尔，将新疆、西藏稳固纳入治理，奠定近代中国版图的基础。",
   "geoFile": "geo/qing.json",
+  "divisionsFile": "geo/qing-div.json",
   "eventsFile": "events/qing.json"
  }
 ]

@@ -1,5 +1,5 @@
 import './style.css';
-import { initMap, showDynasty, selectEvent, setModernVisible, preload } from './map.js';
+import { initMap, showDynasty, selectEvent, setModernVisible, setDivisionsVisible, preload } from './map.js';
 import { renderTimeline, bindKeyboard } from './timeline.js';
 import { renderSidebar as renderSidebarInto } from './sidebar.js';
 
@@ -113,6 +113,7 @@ async function boot() {
   await initMap($('#map'), { onEventClick: handleEventClick });
 
   $('#modern-toggle').addEventListener('change', e => setModernVisible(e.target.checked));
+  $('#division-toggle').addEventListener('change', e => setDivisionsVisible(e.target.checked));
   bindKeyboard(() => step(-1), () => step(1));
 
   // 抽屉把手：点按收起

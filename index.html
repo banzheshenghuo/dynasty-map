@@ -13,14 +13,21 @@
         <span class="seal" aria-hidden="true">疆</span>
         <span class="sub">历代疆域与大事 · 交互地图</span>
       </div>
-      <label class="toggle" title="叠加现代国界与省界作古今对照">
-        <input type="checkbox" id="modern-toggle" checked />
-        <span>现代界线</span>
-      </label>
+      <div class="toggles">
+        <label class="toggle" title="显示本朝政区界（郡/州/路/府），悬浮查看政区名">
+          <input type="checkbox" id="division-toggle" checked />
+          <span>政区界</span>
+        </label>
+        <label class="toggle" title="叠加现代国界与省界作古今对照">
+          <input type="checkbox" id="modern-toggle" checked />
+          <span>现代界线</span>
+        </label>
+      </div>
     </header>
 
     <main class="app-main">
       <div id="map"></div>
+      <div id="div-tip" hidden></div>
       <div id="map-hint" aria-hidden="true">双指缩放地图 · 点圆点看详情</div>
       <div id="event-card">
         <button id="card-close" aria-label="关闭事件详情">×</button>
