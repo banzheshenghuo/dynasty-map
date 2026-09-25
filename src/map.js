@@ -7,11 +7,13 @@ const MODERN_BORDER_ON = 'rgba(96, 82, 60, 0.6)';
 // 邻国底图：更淡的墨色，衬托而不抢疆域主体
 const NEIGHBOR_BORDER_ON = 'rgba(96, 82, 60, 0.30)';
 const NEIGHBOR_FILL_ON = 'rgba(120, 102, 70, 0.05)';
-// 现代省界：细淡墨线，叠在疆域色块之上隐约透出，作古今对照细部参照
-const PROVINCE_BORDER_ON = 'rgba(96, 82, 60, 0.5)';
+// 现代省界：淡墨实线，现行界线作底图参照，视觉上退后（墨=今）
+const PROVINCE_BORDER_ON = 'rgba(96, 82, 60, 0.30)';
 const PROVINCE_FILL_ON = 'rgba(120, 102, 70, 0.03)';
-// 本朝政区界（郡/州/路/府）：较深的墨线，是疆域的主体细节
-const DIVISION_BORDER_ON = 'rgba(61, 50, 38, 0.55)';
+// 本朝政区界（郡/州/路/府）：朱砂虚线，与事件点/印章同源（朱=史），
+// 虚线是制图学通行的历史界线符号，与现代实线形成古今双轨
+const DIVISION_BORDER_ON = 'rgba(158, 61, 44, 0.55)';
+const DIVISION_DASH = [3, 2];
 // 朱砂：事件圆点
 const EVENT_DOT = '#9e3d2c';
 const PAPER = '#f6eed9';
@@ -186,17 +188,20 @@ function baseOption(dynasty, mapName) {
         areaColor: 'transparent',
         borderColor: divisionsVisible ? DIVISION_BORDER_ON : 'rgba(0,0,0,0)',
         borderWidth: 1.1,
+        borderType: DIVISION_DASH,
       },
-      emphasis: { disabled: false, itemStyle: { areaColor: 'rgba(61, 50, 38, 0.06)' } },
+      emphasis: { disabled: false, itemStyle: { areaColor: 'rgba(158, 61, 44, 0.08)' } },
       select: { disabled: true },
       regions: [
         {
           // 邻国画在最底层：淡墨边界 + 极淡底色，随「现代界线」开关显隐
+          // 注意：region 不声明 borderType 会继承默认 itemStyle 的虚线，须显式 solid
           name: '__neighbors__',
           itemStyle: {
             areaColor: modernVisible ? NEIGHBOR_FILL_ON : 'transparent',
             borderColor: modernVisible ? NEIGHBOR_BORDER_ON : 'rgba(0,0,0,0)',
             borderWidth: 0.6,
+            borderType: 'solid',
           },
           emphasis: { disabled: true },
         },
@@ -205,7 +210,8 @@ function baseOption(dynasty, mapName) {
           itemStyle: {
             areaColor: modernVisible ? PROVINCE_FILL_ON : 'transparent',
             borderColor: modernVisible ? PROVINCE_BORDER_ON : 'rgba(0,0,0,0)',
-            borderWidth: 1,
+            borderWidth: 0.8,
+            borderType: 'solid',
           },
           emphasis: { disabled: true },
         },
@@ -215,6 +221,7 @@ function baseOption(dynasty, mapName) {
             areaColor: 'transparent',
             borderColor: modernVisible ? MODERN_BORDER_ON : 'rgba(0,0,0,0)',
             borderWidth: 1,
+            borderType: 'solid',
           },
           emphasis: { disabled: true },
         },
@@ -224,6 +231,7 @@ function baseOption(dynasty, mapName) {
             areaColor: rgba(dynasty.color, 0.40),
             borderColor: dynasty.color,
             borderWidth: 1.4,
+            borderType: 'solid',
           },
           emphasis: { disabled: true },
         },
@@ -349,6 +357,7 @@ export function setModernVisible(visible) {
             areaColor: visible ? NEIGHBOR_FILL_ON : 'transparent',
             borderColor: visible ? NEIGHBOR_BORDER_ON : 'rgba(0,0,0,0)',
             borderWidth: 0.6,
+            borderType: 'solid',
           },
         },
         {
@@ -356,7 +365,8 @@ export function setModernVisible(visible) {
           itemStyle: {
             areaColor: visible ? PROVINCE_FILL_ON : 'transparent',
             borderColor: visible ? PROVINCE_BORDER_ON : 'rgba(0,0,0,0)',
-            borderWidth: 1,
+            borderWidth: 0.8,
+            borderType: 'solid',
           },
         },
         {
@@ -365,6 +375,7 @@ export function setModernVisible(visible) {
             areaColor: 'transparent',
             borderColor: visible ? MODERN_BORDER_ON : 'rgba(0,0,0,0)',
             borderWidth: 1,
+            borderType: 'solid',
           },
         },
         {
@@ -373,6 +384,7 @@ export function setModernVisible(visible) {
             areaColor: rgba(currentDynasty.color, 0.40),
             borderColor: currentDynasty.color,
             borderWidth: 1.4,
+            borderType: 'solid',
           },
         },
       ],

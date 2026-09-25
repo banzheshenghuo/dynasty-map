@@ -43,6 +43,7 @@ body {
   border-radius: 8px;
   background: rgba(252, 247, 234, 0.97);
   border: 1px solid #c5b48c;
+  border-left: 3px solid #9e3d2c; /* 朱砂缘：历史政区签的标记 */
   box-shadow: 0 4px 14px rgba(80, 66, 40, 0.25);
   pointer-events: none;
   white-space: nowrap;
