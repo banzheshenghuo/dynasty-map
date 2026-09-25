@@ -19,6 +19,8 @@ let container = null;
 let modernGeo = null;
 let neighborGeo = null;
 let provinceGeo = null;
+let dotSize = 9;
+let selSize = 13;
 let currentDynasty = null;
 let currentEvents = [];
 let selectedEvent = null;
@@ -54,6 +56,10 @@ export async function initMap(el, handlers) {
   provinceGeo = await fetchJson('geo/provinces.json');
 
   chart = echarts.init(el);
+  // 窄屏放大圆点便于点按
+  const compact = window.matchMedia('(max-width: 900px)').matches;
+  dotSize = compact ? 12 : 9;
+  selSize = compact ? 15 : 13;
   chart.on('click', params => {
     if (params.seriesType === 'scatter' || params.seriesType === 'effectScatter') {
       // 点击后地图会飞行缩放到事件点，原位置的 tooltip 会悬空失真，先收起
@@ -154,7 +160,7 @@ function baseOption(dynasty, mapName) {
         id: 'evt',
         type: 'scatter',
         coordinateSystem: 'geo',
-        symbolSize: 9,
+        symbolSize: dotSize,
         itemStyle: { color: EVENT_DOT, borderColor: PAPER, borderWidth: 1.6 },
         emphasis: { scale: 1.4, itemStyle: { color: '#7e2f22' } },
         tooltip: eventTooltip(),
@@ -164,7 +170,7 @@ function baseOption(dynasty, mapName) {
         id: 'sel',
         type: 'effectScatter',
         coordinateSystem: 'geo',
-        symbolSize: 13,
+        symbolSize: selSize,
         rippleEffect: { scale: 2.8, brushType: 'stroke' },
         itemStyle: { color: dynasty.color, borderColor: PAPER, borderWidth: 1.5 },
         zlevel: 2,
@@ -218,11 +224,14 @@ export function selectEvent(event) {
     ],
   });
   // 飞行落定后在事件点旁重新弹出提示卡，展示完整描述
+  // （窄屏抽屉模式下描述已由抽屉展示，不再弹卡避免遮挡地图）
   clearTimeout(showTipTimer);
-  showTipTimer = setTimeout(() => {
-    const idx = currentEvents.findIndex(e => e.title === event.title);
-    if (idx >= 0) chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: idx });
-  }, 620);
+  if (!window.matchMedia('(max-width: 900px)').matches) {
+    showTipTimer = setTimeout(() => {
+      const idx = currentEvents.findIndex(e => e.title === event.title);
+      if (idx >= 0) chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: idx });
+    }, 620);
+  }
 }
 
 export function setModernVisible(visible) {

@@ -92,6 +92,18 @@ async function boot() {
     $('#sidebar').classList.toggle('open');
   });
 
+  // 抽屉把手：点按收起
+  $('#drawer-grip').addEventListener('click', () => {
+    $('#sidebar').classList.remove('open');
+  });
+
+  // 移动端首屏操作提示，几秒后淡出
+  if (window.matchMedia('(max-width: 900px)').matches) {
+    const hint = $('#map-hint');
+    requestAnimationFrame(() => hint.classList.add('show'));
+    setTimeout(() => hint.classList.remove('show'), 3600);
+  }
+
   // 移动端抽屉打开后点地图关闭
   $('#map').addEventListener('click', () => $('#sidebar').classList.remove('open'));
 
