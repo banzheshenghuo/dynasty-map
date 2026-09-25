@@ -64,5 +64,9 @@ if (!neighbors.features.some(f => f.properties?.name === '__neighbors__')) fail(
 else if (neighbors.features.some(f => f.properties?.country === 'China')) fail('neighbors.json 不应包含中国本体');
 else ok('neighbors.json 邻国底图就绪（' + neighbors.features.length + ' 国');
 
+const provinces = JSON.parse(readFileSync(join(ROOT, 'data/geo/provinces.json'), 'utf8'));
+if (!provinces.features.some(f => f.properties?.name === '__provinces__')) fail('provinces.json \u7f3a\u5c11 __provinces__ \u8981\u7d20');
+else ok('provinces.json \u7701\u754c\u5c31\u7eea\uff08' + provinces.features.length + ' \u4e2a\u7701\u7ea7\u653f\u533a\uff09');
+
 if (errors) { console.error(`\n共 ${errors} 个问题`); process.exit(1); }
 console.log('\n数据自检全部通过');

@@ -121,7 +121,24 @@ console.log(
   `geo/neighbors.json  ${neighbors.features.length}国  ${(JSON.stringify(neighbors).length / 1024).toFixed(0)}KB`
 );
 
-// ── 4. 历史事件 ────────────────────────────────────────────
+// ── 4. 省级行政区界（阿里 DataV）─────────────────────────
+// 现代省界叠在疆域色块之下，作古今对照的细部参照
+const PROVINCES_SRC = 'https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json';
+const provFull = await fetchJson(PROVINCES_SRC);
+const provinces = {
+  type: 'FeatureCollection',
+  features: provFull.features.map(f => ({
+    ...f,
+    properties: { name: '__provinces__', layer: 'provinces', source: '阿里DataV', province: f.properties.name },
+    geometry: { ...f.geometry, coordinates: roundCoords(f.geometry.coordinates, round2) },
+  })),
+};
+writeFileSync(`${ROOT}data/geo/provinces.json`, JSON.stringify(provinces));
+console.log(
+  `geo/provinces.json  ${provinces.features.length}个省级政区  ${(JSON.stringify(provinces).length / 1024).toFixed(0)}KB`
+);
+
+// ── 5. 历史事件 ────────────────────────────────────────────
 const dataJs = await (await fetch(EVENTS_SRC)).text();
 const EVENTS = vm.runInNewContext(dataJs + '\nmodule.exports = EVENTS;', { module: { exports: {} } });
 const yearLabel = y => (y < 0 ? `前${-y}年` : `${y}年`);
@@ -148,7 +165,7 @@ for (const d of DYNASTIES) {
   console.log(`events/${d.id}.json  ${list.length}条`);
 }
 
-// ── 5. 朝代索引 ────────────────────────────────────────────
+// ── 6. 朝代索引 ────────────────────────────────────────────
 const index = DYNASTIES.map(d => ({ ...d, geoFile: `geo/${d.id}.json`, eventsFile: `events/${d.id}.json` }));
 writeFileSync(`${ROOT}data/dynasties.json`, JSON.stringify(index, null, 1));
 console.log(`dynasties.json  ${index.length}个朝代`);
