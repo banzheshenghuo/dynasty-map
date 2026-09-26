@@ -18,12 +18,16 @@
 |---|---|---|
 | 历代疆域轮廓 | [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps) 各年份断面中的中国政权多边形 | GPL-3（本仓库 `data/geo/` 为其衍生，故整体以 GPL-3 发布） |
 | 秦疆域 | 手绘示意多边形，非精确数字化 | 本仓库原创 |
+| 秦代政区界 | [CHGIS V6](https://doi.org/10.7910/DVN/I0Q7SM) 时序数据：东南 9 郡数字化界线，其余以 CHGIS 郡治点位 Voronoi 胞元示意（提取与许可见 [tools/sources/README.md](tools/sources/README.md)） | CC BY-NC-SA 3.0（学术/教育用途，强制引用 CHGIS） |
+| 历代政区界 | [CHGIS V6](https://doi.org/10.7910/DVN/I0Q7SM) + Hartwell 政区快照，经 [china-history-map](https://github.com/pessimistcamellia/china-history-map) 导出 | CC BY-NC-SA 3.0（同上） |
 | 现代中国轮廓 | [阿里 DataV GeoAtlas](https://datav.aliyun.com/portal/school/atlas/area_selector) | 按其使用条款 |
 | 省级政区界 | [阿里 DataV GeoAtlas](https://datav.aliyun.com/portal/school/atlas/area_selector)（100000_full） | 按其使用条款 |
 | 周边国家国界 | [Natural Earth](https://www.naturalearthdata.com/)（50m，公有领域） | 公有领域，无限制 |
 | 历史事件 | 筛选整理自 [pessimistcamellia/china-history-map](https://github.com/pessimistcamellia/china-history-map) 的开源时间线（史实取自公版史料） | 事实性内容 |
 
-**口径说明**：疆域边界为开源数据集的简化示意，与谭其骧《中国历史地图集》等学术口径存在差异（如西汉西域都护府辖区、明代乌斯藏都司范围、唐断面取中唐等），仅供历史学习参考。数据管线见 `tools/build-data.mjs`，可复现。
+**口径说明**：疆域边界为开源数据集的简化示意，与谭其骧《中国历史地图集》等学术口径存在差异（如西汉西域都护府辖区、明代乌斯藏都司范围、唐断面取中唐等），仅供历史学习参考。秦代政区界中，CHGIS V6 有数字化界线的郡用原界线，其余以 CHGIS 郡治点位 Voronoi 胞元示意（详见 `tools/sources/README.md`）。数据管线见 `tools/build-data.mjs`，可复现。
+
+**数据契约**：`data/` 全部为自描述的静态 JSON/GeoJSON（无数据库、无服务端），字段结构与图层识别约定见 [data/SCHEMA.md](data/SCHEMA.md)，可整体迁移到其他技术栈。
 
 ## 开发
 

@@ -3,7 +3,8 @@
  * 数据构建管线：从开放数据源生成 data/ 目录
  *  - 疆域轮廓：aourednik/historical-basemaps (GPL-3) 边疆断面 ∪ CHGIS V6/Hartwell
  *    本部政区并集（海岸线精确贴合，经 china-history-map 导出）
- *  - 秦疆域：手绘示意 + CHGIS 秦郡并集（无 aourednik 断面）
+ *  - 秦疆域：手绘示意 + CHGIS V6 政区并集（无 aourednik 断面）
+ *  - 秦政区界：CHGIS V6 东南界线 + 郡治点位 Voronoi 示意（提取与许可见 tools/sources/README.md）
  *  - 现代轮廓：阿里 DataV
  *  - 历史事件：筛选自 pessimistcamellia/china-history-map 的 EVENTS（公版史料整理）
  * 用法：node tools/build-data.mjs
@@ -11,13 +12,14 @@
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import polygonClipping from 'polygon-clipping';
+import { Delaunay } from 'd3-delaunay';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const UP = 'https://raw.githubusercontent.com/aourednik/historical-basemaps/master/geojson';
 
 // 朝代配置：断面年份 + 政权 NAME + 呈现信息
 const DYNASTIES = [
-  { id: 'qin',    name: '秦',   en: 'Qin',          period: '前221–前207', snapshotLabel: '约前214年（手绘+CHGIS秦郡）', color: '#6D5B8B',
+  { id: 'qin',    name: '秦',   en: 'Qin',          period: '前221–前207', snapshotLabel: '约前214年（手绘轮廓+CHGIS V6 政区）', color: '#6D5B8B',
     summary: '结束战国五百年分裂的首个大一统王朝。北逐匈奴取河套、修长城，南平百越设桂林与象郡，书同文、车同轨、行郡县，奠定此后两千年华夏政治的基本盘。' },
   { id: 'han_w',  name: '西汉', en: 'Western Han',  period: '前202–公元8',  snapshotLabel: '约公元前1年',           color: '#A6402F',
     summary: '开疆拓土的盛世。武帝北击匈奴、取河西四郡、凿空西域，宣帝设西域都护府将天山南北纳入版图，南并南越、西南置郡，疆域远超秦代。' },
@@ -42,6 +44,11 @@ const GEO_SRC = {
 
 const EVENTS_SRC = 'https://raw.githubusercontent.com/pessimistcamellia/china-history-map/main/data.js';
 const MODERN_SRC = 'https://geo.datav.aliyun.com/areas_v3/bound/100000.json';
+// 政区本地源（CHGIS V6 时序子集，提取与许可见 tools/sources/README.md）：
+// 上游多边形数字化偏东南，缺失郡以治所点位 Voronoi 胞元沿疆域轮廓兜底
+const LOCAL_DIV_SRC = {
+  qin: { pgn: 'chgis-v6-qin-pgn.json', pts: 'chgis-v6-qin-pts.json', label: 'CHGIS V6·治所Voronoi示意' },
+};
 const MAX_EVENTS = 12;
 
 const round2 = n => Math.round(n * 100) / 100;
@@ -95,6 +102,78 @@ function unionAll(parts) {
   return u;
 }
 
+// 去掉环内连续重复点与退化环——手绘数据 round2 后易产生，会触发 polygon-clipping 崩溃
+function cleanGeom(coords) {
+  const walk = c => (typeof c[0] === 'number' ? c : c.map(walk));
+  const cleanRing = ring => {
+    const out = [ring[0]];
+    for (let i = 1; i < ring.length; i++) {
+      if (ring[i][0] !== out[out.length - 1][0] || ring[i][1] !== out[out.length - 1][1]) out.push(ring[i]);
+    }
+    return out.length >= 4 ? out : null;
+  };
+  const cleanPoly = poly => poly.map(cleanRing).filter(Boolean);
+  return (typeof coords[0][0] === 'number' ? [cleanPoly(coords)] : coords.map(cleanPoly)).filter(p => p.length);
+}
+
+// 本地源政区：CHGIS 数字化界线郡用原界线；无界线数据的郡以治所点位做
+// Voronoi 胞元，裁去疆域外与已界线郡并集后填充——治所与疆域均为权威数据，界线为示意
+function chgisDivisions(id, parts, src) {
+  const pgn = JSON.parse(readFileSync(`${ROOT}tools/sources/${src.pgn}`, 'utf8'));
+  const pts = JSON.parse(readFileSync(`${ROOT}tools/sources/${src.pts}`, 'utf8'));
+  const territory = unionAll(parts.map(cleanGeom));
+  // 东南多边形量化到与疆域轮廓一致的 round2：海岸重合段完全重合而非近重合，
+  // 否则近重合共线边会触发 polygon-clipping「Unable to complete output ring」
+  const q2 = c => (typeof c[0] === 'number' ? [Math.round(c[0] * 100) / 100, Math.round(c[1] * 100) / 100] : c.map(q2));
+  const seGeoms = pgn.features.map(f => cleanGeom(q2(f.geometry.coordinates)));
+  const se = unionAll(seGeoms);
+  let remainder = null;
+  try {
+    remainder = polygonClipping.difference(territory, se);
+  } catch {
+    console.warn('  秦: 整体 difference 失败，退化为逐胞元裁剪');
+  }
+  const frame = bbox({ type: 'FeatureCollection', features: [{ geometry: { type: 'MultiPolygon', coordinates: territory } }] });
+  const [x0, y0, x1, y1] = [frame[0][0] - 2, frame[0][1] - 2, frame[1][0] + 2, frame[1][1] + 2];
+  const seats = pts.features.map(f => f.geometry.coordinates);
+  const vor = Delaunay.from(seats).voronoi([x0, y0, x1, y1]);
+  const feats = pgn.features.map(f => ({
+    type: 'Feature',
+    properties: { ...f.properties },
+    geometry: { type: 'MultiPolygon', coordinates: f.geometry.coordinates },
+  }));
+  pts.features.forEach((f, i) => {
+    const cell = vor.cellPolygon(i);
+    if (!cell) return console.warn(`  ${id}·${f.properties.name}: 无胞元，跳过`);
+    const ring = cell.slice(0, cell.length - 1); // 去掉闭合重复点
+    let clipped;
+    try {
+      clipped = polygonClipping.intersection([ring], remainder ?? territory);
+      if (!remainder && clipped?.length) {
+        for (const g of seGeoms) {
+          if (!clipped.length) break;
+          try { clipped = polygonClipping.difference(clipped, g); } catch {
+            console.warn(`  ${id}·${f.properties.name}: 减去东南政区失败，该段保留重叠`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`  ${id}·${f.properties.name}: 胞元裁剪失败，跳过`, e.message);
+      return;
+    }
+    if (!clipped?.length) {
+      if (remainder) console.warn(`  ${id}·${f.properties.name}: 胞元与疆域无交集，跳过`);
+      return;
+    }
+    feats.push({
+      type: 'Feature',
+      properties: { ...f.properties },
+      geometry: { type: 'MultiPolygon', coordinates: clipped },
+    });
+  });
+  return { type: 'FeatureCollection', features: feats };
+}
+
 for (const d of DYNASTIES) {
   const id = d.id;
   const parts = [];
@@ -111,17 +190,18 @@ for (const d of DYNASTIES) {
     hand.features.forEach(f => parts.push(roundCoords(toMulti(f.geometry), round2)));
     srcNote.push('手绘示意');
   }
-  const polys = await fetchJson(POLY_SRC(id)).catch(() => null);
+  const local = LOCAL_DIV_SRC[id];
+  const polys = local ? chgisDivisions(id, parts, local) : await fetchJson(POLY_SRC(id)).catch(() => null);
   let nPref = 0;
   if (polys?.features?.length) {
     polys.features.forEach(f => { parts.push(roundCoords(toMulti(f.geometry), round2)); nPref++; });
-    srcNote.push('CHGIS/Hartwell');
+    srcNote.push(local ? local.label : 'CHGIS/Hartwell');
     // 本朝政区界图层：保留郡/州/路/府名与类型，供前端单独渲染与悬浮展示
     const divisions = {
       type: 'FeatureCollection',
       features: polys.features.map(f => ({
         type: 'Feature',
-        properties: { name: f.properties.name, layer: 'division', type: f.properties.type_ch || '' },
+        properties: { name: f.properties.name, layer: 'division', type: f.properties.type_ch || f.properties.type || '' },
         geometry: { type: f.geometry.type, coordinates: roundCoords(f.geometry.coordinates, round2) },
       })),
     };

@@ -4,7 +4,7 @@
   "name": "秦",
   "en": "Qin",
   "period": "前221–前207",
-  "snapshotLabel": "约前214年（手绘+CHGIS秦郡）",
+  "snapshotLabel": "约前214年（手绘轮廓+CHGIS V6 政区）",
   "color": "#6D5B8B",
   "summary": "结束战国五百年分裂的首个大一统王朝。北逐匈奴取河套、修长城，南平百越设桂林与象郡，书同文、车同轨、行郡县，奠定此后两千年华夏政治的基本盘。",
   "geoFile": "geo/qin.json",
