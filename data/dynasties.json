@@ -16,7 +16,7 @@
   "name": "西汉",
   "en": "Western Han",
   "period": "前202–公元8",
-  "snapshotLabel": "约公元前1年",
+  "snapshotLabel": "约公元前1年（CHGIS V6 政区）",
   "color": "#A6402F",
   "summary": "开疆拓土的盛世。武帝北击匈奴、取河西四郡、凿空西域，宣帝设西域都护府将天山南北纳入版图，南并南越、西南置郡，疆域远超秦代。",
   "geoFile": "geo/han_w.json",

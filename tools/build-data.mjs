@@ -21,7 +21,7 @@ const UP = 'https://raw.githubusercontent.com/aourednik/historical-basemaps/mast
 const DYNASTIES = [
   { id: 'qin',    name: '秦',   en: 'Qin',          period: '前221–前207', snapshotLabel: '约前214年（手绘轮廓+CHGIS V6 政区）', color: '#6D5B8B',
     summary: '结束战国五百年分裂的首个大一统王朝。北逐匈奴取河套、修长城，南平百越设桂林与象郡，书同文、车同轨、行郡县，奠定此后两千年华夏政治的基本盘。' },
-  { id: 'han_w',  name: '西汉', en: 'Western Han',  period: '前202–公元8',  snapshotLabel: '约公元前1年',           color: '#A6402F',
+  { id: 'han_w',  name: '西汉', en: 'Western Han',  period: '前202–公元8',  snapshotLabel: '约公元前1年（CHGIS V6 政区）', color: '#A6402F',
     summary: '开疆拓土的盛世。武帝北击匈奴、取河西四郡、凿空西域，宣帝设西域都护府将天山南北纳入版图，南并南越、西南置郡，疆域远超秦代。' },
   { id: 'tang',   name: '唐',   en: 'Tang',         period: '618–907',     snapshotLabel: '开元政区并中唐边疆（约741–800）',        color: '#AE7C2A',
     summary: '开放恢弘的黄金时代。前期灭东西突厥，设安西、北庭都护府经略西域，势力深入中亚；安史之乱后国势转衰，河西渐为吐蕃所隔（本图取中唐断面）。' },
@@ -48,6 +48,7 @@ const MODERN_SRC = 'https://geo.datav.aliyun.com/areas_v3/bound/100000.json';
 // 上游多边形数字化偏东南，缺失郡以治所点位 Voronoi 胞元沿疆域轮廓兜底
 const LOCAL_DIV_SRC = {
   qin: { pgn: 'chgis-v6-qin-pgn.json', pts: 'chgis-v6-qin-pts.json', label: 'CHGIS V6·治所Voronoi示意' },
+  han_w: { pgn: 'chgis-v6-han_w-pgn.json', pts: 'chgis-v6-han_w-pts.json', label: 'CHGIS V6·治所Voronoi示意' },
 };
 const MAX_EVENTS = 12;
 
