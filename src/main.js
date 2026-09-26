@@ -1,5 +1,5 @@
 import './style.css';
-import { initMap, showDynasty, selectEvent, setModernVisible, setDivisionsVisible, preload } from './map.js';
+import { initMap, showDynasty, selectEvent, setModernVisible, setDivisionsVisible, preload, getDivisionFontSize, setDivisionFontSize, resetDivisionFontSize } from './map.js';
 import { renderTimeline, bindKeyboard } from './timeline.js';
 import { renderSidebar as renderSidebarInto } from './sidebar.js';
 
@@ -115,6 +115,35 @@ async function boot() {
   $('#modern-toggle').addEventListener('change', e => setModernVisible(e.target.checked));
   $('#division-toggle').addEventListener('change', e => setDivisionsVisible(e.target.checked));
   bindKeyboard(() => step(-1), () => step(1));
+
+  // 设置面板：政区字号滑杆实时生效并写入 localStorage，重置清存储回自适应默认
+  const settingsBtn = $('#settings-btn');
+  const settingsPanel = $('#settings-panel');
+  settingsBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = settingsPanel.hidden;
+    settingsPanel.hidden = !open;
+    settingsBtn.setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', e => {
+    if (!settingsPanel.hidden && !e.target.closest('.settings')) {
+      settingsPanel.hidden = true;
+      settingsBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+  const fontRange = $('#div-font-range');
+  const fontVal = $('#div-font-val');
+  fontRange.value = getDivisionFontSize();
+  fontVal.textContent = `${getDivisionFontSize()}px`;
+  fontRange.addEventListener('input', () => {
+    setDivisionFontSize(Number(fontRange.value));
+    fontVal.textContent = `${fontRange.value}px`;
+  });
+  $('#div-font-reset').addEventListener('click', () => {
+    resetDivisionFontSize();
+    fontRange.value = getDivisionFontSize();
+    fontVal.textContent = `${getDivisionFontSize()}px`;
+  });
 
   // 抽屉把手：点按收起
   $('#drawer-grip').addEventListener('click', () => {

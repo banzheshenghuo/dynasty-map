@@ -14,6 +14,9 @@ const PROVINCE_FILL_ON = 'rgba(120, 102, 70, 0.03)';
 // 虚线是制图学通行的历史界线符号，与现代实线形成古今双轨
 const DIVISION_BORDER_ON = 'rgba(158, 61, 44, 0.55)';
 const DIVISION_DASH = [3, 2];
+// 政区悬浮/选中：悬浮边框朱砂提亮加粗，选中用更深的陈朱常驻
+const DIVISION_HOVER_BORDER = 'rgba(158, 61, 44, 0.95)';
+const DIVISION_SELECT_BORDER = '#7e2f22';
 // 朱砂：事件圆点
 const EVENT_DOT = '#9e3d2c';
 const PAPER = '#f6eed9';
@@ -71,9 +74,106 @@ function fetchDivisions(dynasty) {
   return divCache.get(dynasty.id);
 }
 
-// ── 政区悬浮提示：自实现（zr mousemove + 射线法点在多边形）──────
+// ── 政区悬浮提示与边框高亮：自实现（zr mousemove + 射线法点在多边形）──
+// 高亮以 region itemStyle 补丁写入/还原，不依赖 geo 的 hover/select 状态机
 let divTipEl = null;
 let divisionRings = [];
+
+const DIVISION_HOVER_STYLE = {
+  areaColor: 'rgba(158, 61, 44, 0.10)',
+  borderColor: DIVISION_HOVER_BORDER,
+  borderWidth: 2.2,
+  borderType: 'solid',
+};
+const DIVISION_SELECT_STYLE = {
+  areaColor: 'rgba(158, 61, 44, 0.14)',
+  borderColor: DIVISION_SELECT_BORDER,
+  borderWidth: 2.6,
+  borderType: 'solid',
+};
+
+// geo.regions 的 setOption 合并按索引而非 name：补丁必须携带完整数组
+// （4 哨兵 + 当前悬浮 + 当前选中），数组变短时尾部项被截断即完成还原
+let hoverDivName = null;
+let selectedDivName = null;
+
+function sentinelRegions(dynasty) {
+  return [
+    {
+      // 邻国画在最底层：淡墨边界 + 极淡底色，随「现代界线」开关显隐
+      // 注意：region 不声明 borderType 会继承默认 itemStyle 的虚线，须显式 solid
+      name: '__neighbors__',
+      itemStyle: {
+        areaColor: modernVisible ? NEIGHBOR_FILL_ON : 'transparent',
+        borderColor: modernVisible ? NEIGHBOR_BORDER_ON : 'rgba(0,0,0,0)',
+        borderWidth: 0.6,
+        borderType: 'solid',
+      },
+      emphasis: { disabled: true },
+    },
+    {
+      name: '__provinces__',
+      itemStyle: {
+        areaColor: modernVisible ? PROVINCE_FILL_ON : 'transparent',
+        borderColor: modernVisible ? PROVINCE_BORDER_ON : 'rgba(0,0,0,0)',
+        borderWidth: 0.8,
+        borderType: 'solid',
+      },
+      emphasis: { disabled: true },
+    },
+    {
+      name: '__modern__',
+      itemStyle: {
+        areaColor: 'transparent',
+        borderColor: modernVisible ? MODERN_BORDER_ON : 'rgba(0,0,0,0)',
+        borderWidth: 1,
+        borderType: 'solid',
+      },
+      emphasis: { disabled: true },
+    },
+    {
+      name: '__dynasty__',
+      itemStyle: {
+        areaColor: rgba(dynasty.color, 0.40),
+        borderColor: dynasty.color,
+        borderWidth: 1.4,
+        borderType: 'solid',
+      },
+      emphasis: { disabled: true },
+    },
+  ];
+}
+
+function paintGeoRegions() {
+  if (!chart || !currentDynasty) return;
+  const extra = [];
+  if (hoverDivName && hoverDivName !== selectedDivName) {
+    extra.push({ name: hoverDivName, itemStyle: { ...DIVISION_HOVER_STYLE } });
+  }
+  if (selectedDivName) extra.push({ name: selectedDivName, itemStyle: { ...DIVISION_SELECT_STYLE } });
+  // 两段式写补丁：临时关闭过渡动画避免描边拖影，随后立即恢复全局时长
+  chart.setOption({
+    animationDurationUpdate: 0,
+    geo: { regions: [...sentinelRegions(currentDynasty), ...extra] },
+  });
+  chart.setOption({ animationDurationUpdate: 550 });
+}
+
+function setHoverDivision(name) {
+  if (hoverDivName === name) return;
+  hoverDivName = name;
+  paintGeoRegions();
+}
+
+function toggleSelectedDivision(name) {
+  selectedDivName = selectedDivName === name ? null : name;
+  paintGeoRegions();
+}
+
+function resetDivisionHighlights() {
+  hoverDivName = null;
+  selectedDivName = null;
+}
 
 const pointInRing = (x, y, ring) => {
   let inside = false;
@@ -143,6 +243,9 @@ function labelPoint(polys) {
 // 注记数据：按政区面积降序，hideOverlap 时大政区优先占位
 let divLabelData = [];
 let labelFontSize = 12;
+// 设置面板持久化键；未存储时窄屏 11 / 桌面 12 自适应
+const DIV_FONT_KEY = 'dm.divFontSize';
+const clampFontSize = px => Math.min(20, Math.max(9, Math.round(px)));
 
 function hideDivTip() {
   if (divTipEl) divTipEl.hidden = true;
@@ -160,17 +263,32 @@ function showDivTip(px, py, div) {
 
 function bindDivisionHover() {
   const zr = chart.getZr();
-  const locate = e => {
-    if (!divisionsVisible || !divisionRings.length || !currentDynasty) { hideDivTip(); return; }
+  const divisionAt = e => {
+    if (!divisionsVisible || !divisionRings.length || !currentDynasty) return null;
     const pt = chart.convertFromPixel({ geoIndex: 0 }, [e.offsetX, e.offsetY]);
-    if (!pt) { hideDivTip(); return; }
-    const div = findDivision(pt[0], pt[1]);
-    div ? showDivTip(e.offsetX, e.offsetY, div) : hideDivTip();
+    return pt ? findDivision(pt[0], pt[1]) : null;
   };
-  zr.on('mousemove', locate);
-  zr.on('globalout', hideDivTip);
-  // 触屏：tap 政区查看名称，tap 空白或地图外消失
-  zr.on('click', locate);
+  zr.on('mousemove', e => {
+    const div = divisionAt(e);
+    setHoverDivision(div?.name ?? null);
+    div ? showDivTip(e.offsetX, e.offsetY, div) : hideDivTip();
+  });
+  zr.on('globalout', () => {
+    setHoverDivision(null);
+    hideDivTip();
+  });
+  // 触屏：tap 政区查看名称 + 高亮边框，tap 空白或地图外消失并取消选中
+  zr.on('click', e => {
+    const div = divisionAt(e);
+    if (!div) {
+      setHoverDivision(null);
+      if (selectedDivName) toggleSelectedDivision(selectedDivName);
+      hideDivTip();
+      return;
+    }
+    toggleSelectedDivision(div.name);
+    showDivTip(e.offsetX, e.offsetY, div);
+  });
 }
 
 export async function initMap(el, handlers) {
@@ -186,6 +304,15 @@ export async function initMap(el, handlers) {
   dotSize = compact ? 12 : 9;
   selSize = compact ? 15 : 13;
   labelFontSize = compact ? 11 : 12;
+  const savedSize = Number(localStorage.getItem(DIV_FONT_KEY));
+  if (savedSize >= 9 && savedSize <= 20) labelFontSize = clampFontSize(savedSize);
+  // 未自定义字号时跟随窄屏断面：载入瞬间视口可能尚未稳定（如内嵌浏览器重载）
+  window
+    .matchMedia('(max-width: 900px)')
+    .addEventListener('change', e => {
+      if (localStorage.getItem(DIV_FONT_KEY)) return;
+      applyDivisionFontSize(e.matches ? 11 : 12);
+    });
   divTipEl = document.getElementById('div-tip');
   bindDivisionHover();
   chart.on('click', params => {
@@ -247,52 +374,11 @@ function baseOption(dynasty, mapName) {
         borderWidth: 1.1,
         borderType: DIVISION_DASH,
       },
+      // 悬浮/选中高亮不走 geo emphasis/select 状态机（实测 select 会波及全部
+      // region），由 bindDivisionHover 以 region itemStyle 补丁手动驱动
       emphasis: { disabled: false, itemStyle: { areaColor: 'rgba(158, 61, 44, 0.08)' } },
       select: { disabled: true },
-      regions: [
-        {
-          // 邻国画在最底层：淡墨边界 + 极淡底色，随「现代界线」开关显隐
-          // 注意：region 不声明 borderType 会继承默认 itemStyle 的虚线，须显式 solid
-          name: '__neighbors__',
-          itemStyle: {
-            areaColor: modernVisible ? NEIGHBOR_FILL_ON : 'transparent',
-            borderColor: modernVisible ? NEIGHBOR_BORDER_ON : 'rgba(0,0,0,0)',
-            borderWidth: 0.6,
-            borderType: 'solid',
-          },
-          emphasis: { disabled: true },
-        },
-        {
-          name: '__provinces__',
-          itemStyle: {
-            areaColor: modernVisible ? PROVINCE_FILL_ON : 'transparent',
-            borderColor: modernVisible ? PROVINCE_BORDER_ON : 'rgba(0,0,0,0)',
-            borderWidth: 0.8,
-            borderType: 'solid',
-          },
-          emphasis: { disabled: true },
-        },
-        {
-          name: '__modern__',
-          itemStyle: {
-            areaColor: 'transparent',
-            borderColor: modernVisible ? MODERN_BORDER_ON : 'rgba(0,0,0,0)',
-            borderWidth: 1,
-            borderType: 'solid',
-          },
-          emphasis: { disabled: true },
-        },
-        {
-          name: '__dynasty__',
-          itemStyle: {
-            areaColor: rgba(dynasty.color, 0.40),
-            borderColor: dynasty.color,
-            borderWidth: 1.4,
-            borderType: 'solid',
-          },
-          emphasis: { disabled: true },
-        },
-      ],
+      regions: sentinelRegions(dynasty),
     },
     tooltip: {
       trigger: 'item',
@@ -372,6 +458,7 @@ export async function showDynasty(dynasty, events, view = {}) {
   currentDynasty = dynasty;
   currentEvents = events;
   selectedEvent = null;
+  resetDivisionHighlights();
 
   const mapName = `map_${dynasty.id}_${Date.now() % 1e6}`;
   // 图层自底向上：邻国 → 疆域 → 现代省界 → 本朝政区界 → 现代轮廓
@@ -404,6 +491,7 @@ export async function setDivisionsVisible(visible) {
   if (divisionsVisible === visible) return;
   divisionsVisible = visible;
   if (!visible) hideDivTip();
+  resetDivisionHighlights();
   if (!currentDynasty) return;
   const opt = chart.getOption();
   const g = opt.geo?.[0] || {};
@@ -438,51 +526,31 @@ export function selectEvent(event) {
 export function setModernVisible(visible) {
   modernVisible = visible;
   if (!currentDynasty) return;
-  chart.setOption({
-    geo: {
-      regions: [
-        {
-          name: '__neighbors__',
-          itemStyle: {
-            areaColor: visible ? NEIGHBOR_FILL_ON : 'transparent',
-            borderColor: visible ? NEIGHBOR_BORDER_ON : 'rgba(0,0,0,0)',
-            borderWidth: 0.6,
-            borderType: 'solid',
-          },
-        },
-        {
-          name: '__provinces__',
-          itemStyle: {
-            areaColor: visible ? PROVINCE_FILL_ON : 'transparent',
-            borderColor: visible ? PROVINCE_BORDER_ON : 'rgba(0,0,0,0)',
-            borderWidth: 0.8,
-            borderType: 'solid',
-          },
-        },
-        {
-          name: '__modern__',
-          itemStyle: {
-            areaColor: 'transparent',
-            borderColor: visible ? MODERN_BORDER_ON : 'rgba(0,0,0,0)',
-            borderWidth: 1,
-            borderType: 'solid',
-          },
-        },
-        {
-          name: '__dynasty__',
-          itemStyle: {
-            areaColor: rgba(currentDynasty.color, 0.40),
-            borderColor: currentDynasty.color,
-            borderWidth: 1.4,
-            borderType: 'solid',
-          },
-        },
-      ],
-    },
-  });
+  paintGeoRegions();
 }
 
 export function preload(dynasty) {
   fetchGeo(dynasty).catch(() => {});
   fetchDivisions(dynasty);
+}
+
+// ── 政区注记字号：设置面板调节，localStorage 持久化 ──────────
+export function getDivisionFontSize() {
+  return labelFontSize;
+}
+
+function applyDivisionFontSize(px) {
+  labelFontSize = clampFontSize(px);
+  chart?.setOption({ series: [{ id: 'div-labels', label: { fontSize: labelFontSize } }] });
+}
+
+export function setDivisionFontSize(px) {
+  applyDivisionFontSize(px);
+  localStorage.setItem(DIV_FONT_KEY, String(labelFontSize));
+}
+
+// 恢复默认：清存储，回到窄屏 11 / 桌面 12 自适应
+export function resetDivisionFontSize() {
+  localStorage.removeItem(DIV_FONT_KEY);
+  applyDivisionFontSize(window.matchMedia('(max-width: 900px)').matches ? 11 : 12);
 }

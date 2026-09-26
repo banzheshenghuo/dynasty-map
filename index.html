@@ -22,6 +22,18 @@
           <input type="checkbox" id="modern-toggle" checked />
           <span>现代界线</span>
         </label>
+        <div class="settings">
+          <button id="settings-btn" title="显示设置" aria-expanded="false" aria-haspopup="true">⚙</button>
+          <div id="settings-panel" hidden>
+            <div class="settings-title">显 示 设 置</div>
+            <div class="settings-row">
+              <label for="div-font-range">政区字号</label>
+              <input type="range" id="div-font-range" min="9" max="20" step="1" />
+              <output id="div-font-val">12px</output>
+            </div>
+            <button id="div-font-reset" type="button">恢复默认字号</button>
+          </div>
+        </div>
       </div>
     </header>
 
