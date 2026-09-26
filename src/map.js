@@ -60,7 +60,13 @@ export async function fetchGeo(dynasty) {
 function fetchDivisions(dynasty) {
   if (!dynasty.divisionsFile) return Promise.resolve(null);
   if (!divCache.has(dynasty.id)) {
-    divCache.set(dynasty.id, fetchJson(dynasty.divisionsFile).catch(() => null));
+    divCache.set(
+      dynasty.id,
+      fetchJson(dynasty.divisionsFile).catch((e) => {
+        console.warn(`政区图层加载失败，本代不显示政区界: ${dynasty.divisionsFile}`, e);
+        return null;
+      })
+    );
   }
   return divCache.get(dynasty.id);
 }
