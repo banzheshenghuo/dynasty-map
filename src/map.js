@@ -261,6 +261,11 @@ function showDivTip(px, py, div) {
   divTipEl.style.top = Math.max(py - 52, 8) + 'px';
 }
 
+// 触屏设备（主指针为粗指针）不做悬浮跟随：zrender 会把手指拖动（touchmove）
+// 派发成 zr mousemove，跟随高亮会让拖动时每帧全量 regions setOption——既卡顿
+// 又高亮乱闪。触屏上政区高亮一律由 tap 点选驱动
+const isTouchLike = window.matchMedia('(pointer: coarse)').matches;
+
 function bindDivisionHover() {
   const zr = chart.getZr();
   const divisionAt = e => {
@@ -268,16 +273,22 @@ function bindDivisionHover() {
     const pt = chart.convertFromPixel({ geoIndex: 0 }, [e.offsetX, e.offsetY]);
     return pt ? findDivision(pt[0], pt[1]) : null;
   };
-  zr.on('mousemove', e => {
-    const div = divisionAt(e);
-    setHoverDivision(div?.name ?? null);
-    div ? showDivTip(e.offsetX, e.offsetY, div) : hideDivTip();
-  });
+  if (isTouchLike) {
+    // 触屏：mousemove 仅用于收起拖动中残留的提示卡，不做检索与高亮
+    zr.on('mousemove', hideDivTip);
+  } else {
+    zr.on('mousemove', e => {
+      const div = divisionAt(e);
+      setHoverDivision(div?.name ?? null);
+      div ? showDivTip(e.offsetX, e.offsetY, div) : hideDivTip();
+    });
+  }
   zr.on('globalout', () => {
     setHoverDivision(null);
     hideDivTip();
   });
-  // 触屏：tap 政区查看名称 + 高亮边框，tap 空白或地图外消失并取消选中
+  // 桌面悬浮+点选、触屏点选共用：点击政区切换常驻高亮并弹提示卡，
+  // 点击空白取消选中；再点已选中的政区视为取消，顺带收起提示卡
   zr.on('click', e => {
     const div = divisionAt(e);
     if (!div) {
@@ -286,8 +297,9 @@ function bindDivisionHover() {
       hideDivTip();
       return;
     }
+    const deselect = selectedDivName === div.name;
     toggleSelectedDivision(div.name);
-    showDivTip(e.offsetX, e.offsetY, div);
+    deselect ? hideDivTip() : showDivTip(e.offsetX, e.offsetY, div);
   });
 }
 
