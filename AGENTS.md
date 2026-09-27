@@ -19,6 +19,8 @@
 - 改 `data/` 或 `tools/` 后：`node tools/validate.mjs` 必须通过
 - 改 `src/` 后：`npx vite build` 必须成功（chunk 体积警告为既有情况，可忽略）
 - commit 用 conventional 风格 + 中文描述（`feat:` / `fix:` / `docs:` / `style:`）
+- **推送授权**：改动验证通过并 commit 后直接 `git push origin main` 触发 Pages
+  部署（2026-09-27 用户授权），无需逐次询问；推送后确认 Actions 运行成功
 
 ## 环境
 
