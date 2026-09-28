@@ -1,17 +1,27 @@
-export function renderSidebar({ infoEl, listEl, dynasty, events, selected, onEventClick }) {
+import { yearLabel } from './timeline.js';
+
+// 侧栏：断面头卡（时代简介 + 政权图例）+ 当前时代大事年表
+export function renderSidebar({ infoEl, listEl, era, snap, events, selected, onEventClick }) {
+  const primary = snap.regimes.find(r => !r.weak) || snap.regimes[0];
   infoEl.innerHTML = `
-    <div class="dyn-head" style="--dyn-color:${dynasty.color}">
-      <h2>${dynasty.name}</h2>
-      <span class="dyn-period">${dynasty.period} · 疆域断面：${dynasty.snapshotLabel}</span>
+    <div class="dyn-head" style="--dyn-color:${primary.color}">
+      <h2>${era.name}</h2>
+      <span class="dyn-period">${yearLabel(snap.year)} · ${snap.label}</span>
     </div>
-    <p class="dyn-summary">${dynasty.summary}</p>
-    <p class="dyn-source">共收录大事 ${events.length} 件 · 点击条目在地图上定位</p>`;
+    <p class="dyn-summary">${era.summary}</p>
+    <div class="regime-chips">
+      ${snap.regimes
+        .map(r => `<span class="chip${r.weak ? ' weak' : ''}" style="--c:${r.color}">${r.name}</span>`)
+        .join('')}
+    </div>
+    <p class="dyn-source">${snap.note}</p>`;
 
   listEl.innerHTML =
     '<div class="evt-caption">大事年表</div>' +
-    events
-      .map(
-        e => `
+    (events.length
+      ? events
+          .map(
+            e => `
       <div class="evt-item ${selected && selected.title === e.title ? 'selected' : ''}" data-title="${e.title}">
         <span class="evt-year">${e.yearLabel}</span>
         <div class="evt-main">
@@ -20,9 +30,9 @@ export function renderSidebar({ infoEl, listEl, dynasty, events, selected, onEve
           <p class="evt-desc">${e.description}</p>
         </div>
       </div>`
-      )
-      .join('');
-
+          )
+          .join('')
+      : '<p class="evt-empty">本时代暂无收录大事</p>');
   listEl.querySelectorAll('.evt-item').forEach(item =>
     item.addEventListener('click', () => {
       const evt = events.find(e => e.title === item.dataset.title);

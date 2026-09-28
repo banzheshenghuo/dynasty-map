@@ -21,9 +21,28 @@ const coordCheck = fc => {
 
 // ── timeline.json：唯一入口 ─────────────────────────────────
 const tl = JSON.parse(readFileSync(join(ROOT, 'data/timeline.json'), 'utf8'));
-const { range, snapshots, events } = tl;
-if (!(range?.from < range?.to)) fail(`range 非法: ${JSON.stringify(range)}`);
+const { range, eras, snapshots, events } = tl;
+if (!(range?.from < range.to)) fail(`range 非法: ${JSON.stringify(range)}`);
 else ok(`timeline.json range 前${-range.from}年 → ${range.to}年`);
+
+// ── 时代分段：无缝衔接覆盖 range，与断面/事件的 era 对齐 ────
+const eraNames = new Set(eras?.map(e => e.name) || []);
+if (!eras?.length) fail('eras 为空');
+else {
+  if (eras[0].from !== range.from || eras[eras.length - 1].to !== range.to)
+    fail('eras 首尾未覆盖 range');
+  let seamless = true;
+  for (let i = 1; i < eras.length; i++)
+    if (eras[i].from !== eras[i - 1].to || eras[i].from >= eras[i].to) seamless = false;
+  if (!seamless) fail('eras 分段未无缝升序衔接');
+  for (const e of eras) {
+    if (!/^#[0-9a-fA-F]{6}$/.test(e.color || '')) fail(`时代 ${e.name} 颜色格式错误: ${e.color}`);
+    if (!e.summary) fail(`时代 ${e.name} 缺 summary`);
+  }
+  if (seamless) ok(`eras ${eras.length} 段无缝衔接（${eras[0].name} → ${eras[eras.length - 1].name}）`);
+}
+for (const s of snapshots || []) if (!eraNames.has(s.era)) fail(`断面 ${s.id} era "${s.era}" 不在 eras[] 中`);
+for (const e of events || []) if (!eraNames.has(e.era)) fail(`事件「${e.title}」era "${e.era}" 不在 eras[] 中`);
 
 // ── 断面 ────────────────────────────────────────────────────
 let prevYear = -Infinity;

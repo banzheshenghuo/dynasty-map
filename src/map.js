@@ -28,12 +28,12 @@ let neighborGeo = null;
 let provinceGeo = null;
 let dotSize = 9;
 let selSize = 13;
-// 本朝政区界（郡/州/路/府）：按朝代懒加载；要素名即政区名（唯一），
+// 断面政区界（郡/州/路/府）：按断面懒加载；要素名即政区名（唯一），
 // 走 geo 默认样式渲染，悬浮由 geo 级 tooltip 显示政区名
 let divisionGeo = null;
 let divisionsVisible = true;
 const divCache = new Map();
-let currentDynasty = null;
+let currentSnap = null;
 let currentEvents = [];
 let selectedEvent = null;
 let modernVisible = true;
@@ -53,25 +53,25 @@ async function fetchJson(path) {
   return res.json();
 }
 
-export async function fetchGeo(dynasty) {
-  if (!geoCache.has(dynasty.id)) {
-    geoCache.set(dynasty.id, fetchJson(dynasty.geoFile));
+export async function fetchGeo(snap) {
+  if (!geoCache.has(snap.id)) {
+    geoCache.set(snap.id, fetchJson(snap.geoFile));
   }
-  return geoCache.get(dynasty.id);
+  return geoCache.get(snap.id);
 }
 
-function fetchDivisions(dynasty) {
-  if (!dynasty.divisionsFile) return Promise.resolve(null);
-  if (!divCache.has(dynasty.id)) {
+function fetchDivisions(snap) {
+  if (!snap.divisionsFile) return Promise.resolve(null);
+  if (!divCache.has(snap.id)) {
     divCache.set(
-      dynasty.id,
-      fetchJson(dynasty.divisionsFile).catch((e) => {
-        console.warn(`政区图层加载失败，本代不显示政区界: ${dynasty.divisionsFile}`, e);
+      snap.id,
+      fetchJson(snap.divisionsFile).catch((e) => {
+        console.warn(`政区图层加载失败，本断面不显示政区界: ${snap.divisionsFile}`, e);
         return null;
       })
     );
   }
-  return divCache.get(dynasty.id);
+  return divCache.get(snap.id);
 }
 
 // ── 政区悬浮提示与边框高亮：自实现（zr mousemove + 射线法点在多边形）──
@@ -97,7 +97,11 @@ const DIVISION_SELECT_STYLE = {
 let hoverDivName = null;
 let selectedDivName = null;
 
-function sentinelRegions(dynasty) {
+// 断面主政权色（选中涟漪、事件卡、侧栏标题等强调用）
+export const primaryColor = snap =>
+  snap.regimes.find(r => !r.weak)?.color || snap.regimes[0]?.color || '#9e3d2c';
+
+function sentinelRegions(snap) {
   return [
     {
       // 邻国画在最底层：淡墨边界 + 极淡底色，随「现代界线」开关显隐
@@ -131,21 +135,22 @@ function sentinelRegions(dynasty) {
       },
       emphasis: { disabled: true },
     },
-    {
-      name: '__dynasty__',
+    // 多政权并立：一政权一 feature 一配色；weak（游牧/藩属）更淡退后
+    ...snap.regimes.map(r => ({
+      name: `__regime_${r.name}`,
       itemStyle: {
-        areaColor: rgba(dynasty.color, 0.40),
-        borderColor: dynasty.color,
-        borderWidth: 1.4,
+        areaColor: rgba(r.color, r.weak ? 0.20 : 0.40),
+        borderColor: r.weak ? rgba(r.color, 0.60) : r.color,
+        borderWidth: r.weak ? 1 : 1.4,
         borderType: 'solid',
       },
       emphasis: { disabled: true },
-    },
+    })),
   ];
 }
 
 function paintGeoRegions() {
-  if (!chart || !currentDynasty) return;
+  if (!chart || !currentSnap) return;
   const extra = [];
   if (hoverDivName && hoverDivName !== selectedDivName) {
     extra.push({ name: hoverDivName, itemStyle: { ...DIVISION_HOVER_STYLE } });
@@ -154,7 +159,7 @@ function paintGeoRegions() {
   // 两段式写补丁：临时关闭过渡动画避免描边拖影，随后立即恢复全局时长
   chart.setOption({
     animationDurationUpdate: 0,
-    geo: { regions: [...sentinelRegions(currentDynasty), ...extra] },
+    geo: { regions: [...sentinelRegions(currentSnap), ...extra] },
   });
   chart.setOption({ animationDurationUpdate: 550 });
 }
@@ -255,7 +260,7 @@ function showDivTip(px, py, div) {
   if (!divTipEl) return;
   divTipEl.hidden = false;
   divTipEl.innerHTML = `<div class="tip-title">${div.name}</div>
-    <div class="tip-loc">${currentDynasty?.name || ''} · ${div.type || '政区'}</div>`;
+    <div class="tip-loc">${currentSnap?.era || ''} · ${div.type || '政区'}</div>`;
   const w = container.clientWidth, h = container.clientHeight;
   divTipEl.style.left = Math.min(px + 14, w - 170) + 'px';
   divTipEl.style.top = Math.max(py - 52, 8) + 'px';
@@ -269,7 +274,7 @@ const isTouchLike = window.matchMedia('(pointer: coarse)').matches;
 function bindDivisionHover() {
   const zr = chart.getZr();
   const divisionAt = e => {
-    if (!divisionsVisible || !divisionRings.length || !currentDynasty) return null;
+    if (!divisionsVisible || !divisionRings.length || !currentSnap) return null;
     const pt = chart.convertFromPixel({ geoIndex: 0 }, [e.offsetX, e.offsetY]);
     return pt ? findDivision(pt[0], pt[1]) : null;
   };
@@ -365,7 +370,7 @@ const eventTooltip = () => ({
   },
 });
 
-function baseOption(dynasty, mapName) {
+function baseOption(snap, mapName) {
   return {
     animationDurationUpdate: 550,
     geo: {
@@ -390,7 +395,7 @@ function baseOption(dynasty, mapName) {
       // region），由 bindDivisionHover 以 region itemStyle 补丁手动驱动
       emphasis: { disabled: false, itemStyle: { areaColor: 'rgba(158, 61, 44, 0.08)' } },
       select: { disabled: true },
-      regions: sentinelRegions(dynasty),
+      regions: sentinelRegions(snap),
     },
     tooltip: {
       trigger: 'item',
@@ -436,7 +441,7 @@ function baseOption(dynasty, mapName) {
         coordinateSystem: 'geo',
         symbolSize: selSize,
         rippleEffect: { scale: 2.8, brushType: 'stroke' },
-        itemStyle: { color: dynasty.color, borderColor: PAPER, borderWidth: 1.5 },
+        itemStyle: { color: primaryColor(snap), borderColor: PAPER, borderWidth: 1.5 },
         zlevel: 2,
         tooltip: eventTooltip(),
         data: selectedEvent ? [toPoint(selectedEvent)] : [],
@@ -447,9 +452,9 @@ function baseOption(dynasty, mapName) {
 
 const toPoint = e => ({ name: e.title, value: [e.location.lng, e.location.lat], event: e });
 
-export async function showDynasty(dynasty, events, view = {}) {
-  const geo = await fetchGeo(dynasty);
-  const divisions = await fetchDivisions(dynasty);
+export async function showSnapshot(snap, events, view = {}) {
+  const geo = await fetchGeo(snap);
+  const divisions = await fetchDivisions(snap);
   divisionGeo = divisions;
   // 射线法检索结构：每政区保留多边形环组
   divisionRings = (divisions?.features || []).map(f => ({
@@ -467,13 +472,13 @@ export async function showDynasty(dynasty, events, view = {}) {
         })
         .filter(Boolean)
     : [];
-  currentDynasty = dynasty;
+  currentSnap = snap;
   currentEvents = events;
   selectedEvent = null;
   resetDivisionHighlights();
 
-  const mapName = `map_${dynasty.id}_${Date.now() % 1e6}`;
-  // 图层自底向上：邻国 → 疆域 → 现代省界 → 本朝政区界 → 现代轮廓
+  const mapName = `map_${snap.id}_${Date.now() % 1e6}`;
+  // 图层自底向上：邻国 → 各政权疆域 → 现代省界 → 断面政区界 → 现代轮廓
   const combined = {
     type: 'FeatureCollection',
     features: [
@@ -489,7 +494,7 @@ export async function showDynasty(dynasty, events, view = {}) {
   // 转场：先淡出画布再换图，规避 geo 换图无过渡的生硬感
   container.style.opacity = '0.35';
   setTimeout(() => {
-    const opt = baseOption(dynasty, mapName);
+    const opt = baseOption(snap, mapName);
     // 开关政区层时保持当前视野（中心/缩放）
     if (view.center) opt.geo.center = view.center;
     if (view.zoom) opt.geo.zoom = view.zoom;
@@ -504,16 +509,16 @@ export async function setDivisionsVisible(visible) {
   divisionsVisible = visible;
   if (!visible) hideDivTip();
   resetDivisionHighlights();
-  if (!currentDynasty) return;
+  if (!currentSnap) return;
   const opt = chart.getOption();
   const g = opt.geo?.[0] || {};
-  await showDynasty(currentDynasty, currentEvents, { center: g.center, zoom: g.zoom });
+  await showSnapshot(currentSnap, currentEvents, { center: g.center, zoom: g.zoom });
 }
 
 let showTipTimer = null;
 
 export function selectEvent(event) {
-  if (!currentDynasty) return;
+  if (!currentSnap) return;
   selectedEvent = event;
   const opt = chart.getOption();
   const curZoom = opt.geo?.[0]?.zoom ?? 1;
@@ -537,13 +542,13 @@ export function selectEvent(event) {
 
 export function setModernVisible(visible) {
   modernVisible = visible;
-  if (!currentDynasty) return;
+  if (!currentSnap) return;
   paintGeoRegions();
 }
 
-export function preload(dynasty) {
-  fetchGeo(dynasty).catch(() => {});
-  fetchDivisions(dynasty);
+export function preload(snap) {
+  fetchGeo(snap).catch(() => {});
+  fetchDivisions(snap);
 }
 
 // ── 政区注记字号：设置面板调节，localStorage 持久化 ──────────

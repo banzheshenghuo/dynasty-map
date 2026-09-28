@@ -22,11 +22,20 @@ data/
 
 ## timeline.json — 时间轴索引
 
-顶层 `{ range, snapshots, events }`：
+顶层 `{ range, eras, snapshots, events }`：
 
 - `range`：`{ from, to }` 断面年份范围（负数即公元前，下同）
+- `eras[]`：时代分段（时间轴底色/聚合/侧栏简介），按 `from` 升序、相邻段
+  `from == 前段 to`，首尾恰覆盖 `range`
 - `snapshots[]`：按 `year` 严格升序，不许重复年份
 - `events[]`：跨断面按上游朝代标签合并、按标题去重，按 `year` 升序
+
+### eras[] 每条
+
+- `name`：时代名，与 `snapshots[].era` 取值一致
+- `from` / `to`：起止年份（分段边界，非断面对齐）
+- `color`：**表现层元数据**（`#RRGGBB`，取该时代首个断面主政权色）
+- `summary`：时代一句话简介（侧栏展示）
 
 ### snapshots[] 每条
 

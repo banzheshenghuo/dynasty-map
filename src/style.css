@@ -32,7 +32,7 @@ body {
 }
 
 /* 触摸设备：消除 300ms 双击缩放延迟；地图画布手势交给 ECharts */
-.tl-item, .evt-item, .toggle, #drawer-btn, .drawer-grip { touch-action: manipulation; }
+.evt-item, .toggle, #drawer-btn, .drawer-grip { touch-action: manipulation; }
 #map canvas { touch-action: none; }
 
 /* 政区悬浮纸签（自实现）：贴在 #map 内 */
@@ -217,6 +217,38 @@ body {
 }
 .dyn-source { margin-top: 8px; font-size: 11px; color: var(--ink-faint); letter-spacing: 0.5px; }
 
+/* 政权图例：本断面政权色票（weak=淡显游牧/藩属） */
+.regime-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2.5px 9px 2.5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 252, 242, 0.5);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  letter-spacing: 1px;
+}
+.chip::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-radius: 2.5px;
+  background: var(--c);
+  box-shadow: inset 0 0 0 1px rgba(59, 50, 38, 0.18);
+}
+.chip.weak { opacity: 0.62; font-size: 11px; }
+.chip.weak::before { border-radius: 50%; }
+
+.evt-empty { margin-top: 6px; font-size: 12px; color: var(--ink-faint); }
+
 /* 事件列表 */
 .evt-caption {
   margin: 20px 0 8px;
@@ -267,72 +299,156 @@ body {
 }
 .evt-item.selected .evt-desc { display: block; }
 
-/* ── 底栏时间轴：卷尾 ─────────────────── */
+/* ── 底栏时间轴：卷尾 · 连续拖动滑杆 ───── */
 .app-footer {
   flex: none;
   border-top: 3px double var(--line);
   background: var(--paper-light);
 }
 
-#timeline {
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  gap: 4px;
-  padding: 8px 16px 4px;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
-}
-#timeline::-webkit-scrollbar { height: 5px; }
-#timeline::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+#timeline { padding: 16px 20px 4px; }
 
-.tl-item {
+.tl-axis {
+  position: relative;
+  height: 40px;
+  cursor: pointer;
+  touch-action: none; /* 横向拖动交给指针逻辑，不滚动页面 */
+}
+.tl-axis::selection { background: transparent; }
+
+/* 时代分段条：底色为时代主政权色淡化 */
+.tl-segs {
+  position: absolute;
+  left: 0; right: 0; top: 14px; bottom: 9px;
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--paper-light);
+}
+.tl-seg {
   position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  min-width: 96px;
-  padding: 8px 10px 9px;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--ink-soft);
-  cursor: pointer;
-  transition: all 0.18s;
-  font-family: var(--serif);
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  color: rgba(59, 50, 38, 0.78);
+  background: var(--seg-color, transparent);
+  transition: filter 0.15s;
 }
-.tl-item:hover { color: var(--ink); background: var(--panel-2); }
-.tl-item.active { color: var(--ink); background: var(--panel-2); }
-.tl-name {
-  font-family: var(--kai);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 3px;
-}
-.tl-item.active .tl-name { color: var(--dyn-color, var(--cinnabar)); }
-.tl-period { font-size: 10.5px; opacity: 0.85; font-variant-numeric: tabular-nums; }
-.tl-item::before {
+.tl-seg:not(:first-child)::before {
   content: '';
   position: absolute;
-  top: 50%;
-  left: -14px;
-  width: 24px;
-  height: 1px;
+  left: 0; top: 18%; bottom: 18%;
+  width: 1px;
   background: var(--line);
 }
-.tl-item:first-child::before { display: none; }
-/* 当前朝代：签条式朱砂/朝代色底标 */
-.tl-item.active::after {
+.tl-seg:hover { filter: brightness(0.94); }
+.tl-seg.cur { box-shadow: inset 0 -3px 0 rgba(59, 50, 38, 0.35); }
+
+/* 断面刻度：吸附落点 */
+.tl-tick {
+  position: absolute;
+  bottom: 4px;
+  width: 1px;
+  height: 4px;
+  margin-left: -0.5px;
+  background: var(--ink-faint);
+  opacity: 0.55;
+}
+.tl-tick.on {
+  width: 3px;
+  height: 6px;
+  margin-left: -1.5px;
+  bottom: 3px;
+  background: var(--cinnabar);
+  opacity: 1;
+}
+
+/* 事件打点：朱砂小圆（史=朱），可点击跳转 */
+.tl-dot {
+  position: absolute;
+  bottom: 12px;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  opacity: 0.5;
+  cursor: pointer;
+  transition: transform 0.12s, opacity 0.12s;
+}
+.tl-dot::after {
   content: '';
   position: absolute;
-  left: 24%;
-  right: 24%;
-  bottom: 3px;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--dyn-color, var(--cinnabar));
+  inset: -5px; /* 扩大点按热区 */
+}
+.tl-dot:hover {
+  opacity: 1;
+  transform: scale(1.5);
+}
+
+/* 手柄：朱砂立杆 + 底部圆钮 */
+.tl-handle {
+  position: absolute;
+  top: 8px;
+  bottom: 0;
+  width: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.tl-handle::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 8px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--cinnabar);
+  box-shadow: 0 0 0 1px rgba(246, 238, 217, 0.6);
+}
+.tl-handle::after {
+  content: '';
+  position: absolute;
+  left: -5.5px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  border: 2px solid var(--paper-light);
+  box-shadow: 0 1px 4px rgba(80, 60, 30, 0.4);
+}
+
+/* 年份读数气泡：贴手柄、不出轴两端 */
+.tl-bubble {
+  position: absolute;
+  top: -30px;
+  transform: translateX(-50%);
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: rgba(58, 48, 35, 0.88);
+  color: #f0e6cf;
+  font-size: 12px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.tl-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: rgba(58, 48, 35, 0.88);
+  border-bottom: none;
 }
 
 .disclaimer {
@@ -376,19 +492,10 @@ body {
 
   #map { flex: 1; min-height: 0; }
 
-  /* 时间轴：大触摸目标 + 吸附滚动 + 两端渐隐提示可横滑 */
-  #timeline {
-    gap: 2px;
-    padding: 6px 14px 2px;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
-    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
-    mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
-  }
-  .tl-item { min-width: 84px; padding: 8px 8px 12px; scroll-snap-align: center; }
-  .tl-name { font-size: 18px; }
-  .tl-period { font-size: 11px; }
-  .tl-item.active::after { left: 20%; right: 20%; height: 3.5px; }
+  /* 时间轴：贴边留白收窄，气泡不遮触控目标 */
+  #timeline { padding: 14px 12px 2px; }
+  .tl-axis { height: 44px; }
+  .tl-bubble { font-size: 12.5px; padding: 4px 13px; }
 
   .disclaimer {
     font-size: 10px;

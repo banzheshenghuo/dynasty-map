@@ -83,7 +83,8 @@ const REGIME_COLORS = {
   '北魏': '#5E7A6A', '南朝': '#A87A4A', '东魏': '#6A8A9A', '西魏': '#7A9A8A',
   '隋': '#8A5A7A', '唐': '#AE7C2A', '吐蕃': '#9A5A4A', '突厥': '#7A7A8A', '回鹘': '#8A8A6A',
   '南诏': '#6A9A8A', '渤海': '#5A7A9A', '五代十国': '#8C6D46', '契丹': '#7A5A6A',
-  '辽': '#8A5A4A', '北宋': '#4E6E8E', '西夏': '#6A7A5A', '金': '#7A6A4A', '蒙古': '#9A7A5A',
+  '辽': '#8A5A4A', '北宋': '#4E6E8E', '南宋': '#6E92AC', '西夏': '#6A7A5A', '金': '#7A6A4A',
+  '蒙古': '#9A7A5A', '察合台汗国': '#9A8A6A',
   '元': '#46708F', '明': '#5F7D50', '南明': '#A87A4A', '清': '#3F7E76',
 };
 
@@ -459,6 +460,41 @@ function buildDivisions(cfg, adminTerritories, snapId) {
   return { type: 'FeatureCollection', features: feats };
 }
 
+// ── 时代分段：时间轴底色 + 侧栏时代简介（era 聚合，颜色取首个断面主政权）──
+const ERA_SUMMARY = {
+  '秦': '结束战国五百年分裂的首个大一统王朝。北逐匈奴取河套、修长城，南平百越设桂林与象郡，书同文、车同轨、行郡县，奠定此后两千年华夏政治的基本盘。',
+  '西汉': '开疆拓土的盛世。武帝北击匈奴、取河西四郡、凿空西域，宣帝设西域都护府将天山南北纳入版图，疆域远超秦代。',
+  '东汉': '光武中兴重建汉室，西域三绝三通；后期羌乱迭起，西北疆域渐次收缩。',
+  '三国': '魏蜀吴三分天下，州制从监察区变为实级政区，为后世州郡县三级制张本。',
+  '西晋': '短暂统一后又陷分裂，永嘉之乱衣冠南渡，北方进入十六国时代。',
+  '东晋十六国': '东晋偏安江左；北方匈奴、羯、氐、羌迭起建国，淝水之战前秦一度统一北方。',
+  '南北朝': '北魏汉化改革定鼎中原，南朝宋齐梁陈更迭；后期分为东西魏，鼎峙之势延续至隋初。',
+  '隋': '结束近三百年分裂再造大一统，创科举、通运河，为大唐盛世奠基。',
+  '唐': '开放恢弘的黄金时代。前期灭东西突厥，设安西、北庭都护府经略西域；安史之乱后国势转衰，河西渐为吐蕃所隔。',
+  '五代十国': '唐亡后中原五朝迭嬗、南方十国并立，契丹崛起北方建辽。',
+  '辽北宋': '澶渊之盟后宋辽百年和平，西夏立国西北，三方鼎峙共处。',
+  '金南宋': '靖康之变宋室南渡，金据淮河—秦岭以北；十三世纪蒙古崛起漠北，格局重洗。',
+  '元': '大一统王朝中疆域最辽阔者。兼并吐蕃故地置宣政院，岭北行省直抵漠北；行省制度为明清所沿用。',
+  '明': '重建汉族大一统。前期设奴儿干都司经略东北、辖乌斯藏都司，郑和七下西洋；中后期边疆收缩，北界退至长城一线。',
+  '清': '最后一个大一统王朝。康雍乾百年开疆：收台湾、定漠北、平准噶尔，将新疆、西藏稳固纳入治理，奠定近代中国版图的基础。',
+};
+const eras = [];
+{
+  let cur = null;
+  for (const s of SNAPSHOTS) {
+    if (cur && cur.name === s.era) continue;
+    if (cur) cur.to = s.year;
+    const main = s.territories.find(t => !t.weak);
+    cur = {
+      name: s.era, from: s.year, to: null,
+      color: REGIME_COLORS[main?.name] || '#8C8270',
+      summary: ERA_SUMMARY[s.era] || '',
+    };
+    eras.push(cur);
+  }
+  cur.to = SNAPSHOTS[SNAPSHOTS.length - 1].year;
+}
+
 // ── 断面主循环 ──────────────────────────────────────────────
 const timelineSnapshots = [];
 for (const snap of SNAPSHOTS) {
@@ -537,6 +573,7 @@ for (const [era, ids] of eraOfEvent) {
 events.sort((a, b) => a.year - b.year);
 writeFileSync(`${ROOT}data/timeline.json`, JSON.stringify({
   range: { from: SNAPSHOTS[0].year, to: SNAPSHOTS[SNAPSHOTS.length - 1].year },
+  eras,
   snapshots: timelineSnapshots,
   events,
 }));

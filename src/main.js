@@ -1,6 +1,17 @@
 import './style.css';
-import { initMap, showDynasty, selectEvent, setModernVisible, setDivisionsVisible, preload, getDivisionFontSize, setDivisionFontSize, resetDivisionFontSize } from './map.js';
-import { renderTimeline, bindKeyboard } from './timeline.js';
+import {
+  initMap,
+  showSnapshot,
+  selectEvent,
+  setModernVisible,
+  setDivisionsVisible,
+  preload,
+  getDivisionFontSize,
+  setDivisionFontSize,
+  resetDivisionFontSize,
+  primaryColor,
+} from './map.js';
+import { createTimeline, bindKeyboard } from './timeline.js';
 import { renderSidebar as renderSidebarInto } from './sidebar.js';
 
 const BASE = import.meta.env.BASE_URL;
@@ -8,13 +19,13 @@ const $ = s => document.querySelector(s);
 const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
 
 const state = {
-  dynasties: [],
-  currentIdx: 0,
+  tl: null, // 时间轴组件
+  snapshots: [],
+  eras: [],
   events: [],
+  snapIdx: -1,
   selected: null,
 };
-
-const eventsCache = new Map();
 
 async function fetchJson(path) {
   const res = await fetch(BASE + path);
@@ -22,52 +33,62 @@ async function fetchJson(path) {
   return res.json();
 }
 
-async function loadEvents(dynasty) {
-  if (!eventsCache.has(dynasty.id)) {
-    eventsCache.set(dynasty.id, fetchJson(dynasty.eventsFile));
-  }
-  return eventsCache.get(dynasty.id);
-}
+const eraOf = snap => state.eras.find(e => e.name === snap.era) || { name: snap.era, summary: '' };
+const eventsOfEra = era => state.events.filter(e => e.era === era);
+const nearestIdx = year => {
+  let best = 0, bd = Infinity;
+  state.snapshots.forEach((s, i) => {
+    const d = Math.abs(s.year - year);
+    if (d < bd) { bd = d; best = i; }
+  });
+  return best;
+};
 
 function renderSidebar() {
-  const d = state.dynasties[state.currentIdx];
+  const snap = state.snapshots[state.snapIdx];
+  if (!snap) return;
   renderSidebarInto({
     infoEl: $('#dynasty-info'),
     listEl: $('#event-list'),
-    dynasty: d,
-    events: state.events,
+    era: eraOf(snap),
+    snap,
+    events: eventsOfEra(snap.era),
     selected: state.selected,
     onEventClick: handleEventClick,
   });
 }
 
-function render() {
-  const d = state.dynasties[state.currentIdx];
-  renderTimeline($('#timeline'), state.dynasties, d.id, switchDynasty);
-  renderSidebar();
+// URL 年份：?y=-221（吸附断面年份写入，可任意值进入后取最近断面）
+function writeUrl(snap) {
+  const url = new URL(location.href);
+  url.searchParams.set('y', String(snap.year));
+  history.replaceState(null, '', url);
 }
 
-async function switchDynasty(id) {
-  const idx = state.dynasties.findIndex(d => d.id === id);
-  if (idx < 0) return;
-  state.currentIdx = idx;
+let switching = null;
+async function switchSnapshot(idx) {
+  if (idx === state.snapIdx) return;
+  const snap = state.snapshots[idx];
+  if (!snap) return;
+  state.snapIdx = idx;
   state.selected = null;
   hideEventCard();
-  const d = state.dynasties[idx];
-  state.events = await loadEvents(d);
-  render();
-  await showDynasty(d, state.events);
-
-  const next = state.dynasties[idx + 1];
-  if (next) preload(next);
+  writeUrl(snap);
+  renderSidebar();
+  // 相邻断面预取，拖动时间轴时换图无网络等待
+  preload(state.snapshots[idx - 1]);
+  preload(state.snapshots[idx + 1]);
+  const run = showSnapshot(snap, eventsOfEra(snap.era));
+  switching = run;
+  await run;
 }
 
 // 移动端事件卡：点地图圆点后的轻量详情浮层（抽屉的替代展示，不挡地图与时间轴）
 function showEventCard(evt) {
   const card = $('#event-card');
-  const d = state.dynasties[state.currentIdx];
+  const snap = state.snapshots[state.snapIdx];
   card.querySelector('.card-year').textContent = evt.yearLabel;
-  card.querySelector('.card-year').style.color = d.color;
+  card.querySelector('.card-year').style.color = primaryColor(snap);
   card.querySelector('.card-loc').textContent = evt.location.name || '';
   card.querySelector('.card-title').textContent = evt.title;
   card.querySelector('.card-desc').textContent = evt.description;
@@ -78,7 +99,8 @@ function hideEventCard() {
   $('#event-card').classList.remove('show');
 }
 
-function handleEventClick(evt, opts = {}) {
+async function handleEventClick(evt, opts = {}) {
+  if (!evt) return;
   const mobile = isMobile();
   // 抽屉浏览态：再点同一事件收起描述，不飞图
   if (mobile && !opts.fromMap && state.selected && state.selected.title === evt.title) {
@@ -88,7 +110,12 @@ function handleEventClick(evt, opts = {}) {
     return;
   }
   state.selected = evt;
-  const d = state.dynasties[state.currentIdx];
+  // 事件点可能在别的时代（时间轴打点跨时代跳转）：先切到最近断面并移动手柄
+  const idx = nearestIdx(evt.year);
+  if (idx !== state.snapIdx) state.tl.setSnap(idx); // 同步触发 onSnap → switchSnapshot
+  // switchSnapshot 会重置 selected，待其落定后再恢复选中并飞图
+  await (switching ?? Promise.resolve());
+  state.selected = evt;
   renderSidebar();
   selectEvent(evt);
   if (mobile) {
@@ -103,14 +130,34 @@ function handleEventClick(evt, opts = {}) {
 }
 
 function step(delta) {
-  const next = state.dynasties[state.currentIdx + delta];
-  if (next) switchDynasty(next.id);
+  const next = state.snapIdx + delta;
+  if (next >= 0 && next < state.snapshots.length) state.tl.setSnap(next);
 }
 
 async function boot() {
-  state.dynasties = await fetchJson('dynasties.json');
+  const tl = await fetchJson('timeline.json');
+  state.snapshots = tl.snapshots;
+  state.eras = tl.eras;
+  state.events = tl.events;
 
   await initMap($('#map'), { onEventClick: handleEventClick });
+
+  // URL 年份 → 初始断面（无参数取首个断面；注意 Number(null)===0 不可作判据）
+  const yRaw = new URLSearchParams(location.search).get('y');
+  const yParam = yRaw === null || yRaw.trim() === '' ? NaN : Number(yRaw);
+  const initIdx =
+    Number.isFinite(yParam) && yParam >= tl.range.from && yParam <= tl.range.to
+      ? nearestIdx(yParam)
+      : 0;
+
+  state.tl = createTimeline($('#timeline'), {
+    range: tl.range,
+    eras: tl.eras,
+    snapshots: tl.snapshots,
+    events: tl.events,
+    onSnap: snap => switchSnapshot(state.snapshots.indexOf(snap)),
+    onEvent: evt => handleEventClick(evt, { fromMap: true }),
+  });
 
   $('#modern-toggle').addEventListener('change', e => setModernVisible(e.target.checked));
   $('#division-toggle').addEventListener('change', e => setDivisionsVisible(e.target.checked));
@@ -158,7 +205,7 @@ async function boot() {
   });
 
   // 移动端首屏操作提示，几秒后淡出
-  if (window.matchMedia('(max-width: 900px)').matches) {
+  if (isMobile()) {
     const hint = $('#map-hint');
     requestAnimationFrame(() => hint.classList.add('show'));
     setTimeout(() => hint.classList.remove('show'), 3600);
@@ -167,7 +214,7 @@ async function boot() {
   // 移动端抽屉打开后点地图关闭
   $('#map').addEventListener('click', () => $('#sidebar').classList.remove('open'));
 
-  await switchDynasty(state.dynasties[0].id);
+  state.tl.setSnap(initIdx);
 }
 
 boot().catch(err => {
