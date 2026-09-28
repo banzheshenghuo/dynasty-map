@@ -9,62 +9,111 @@ let errors = 0;
 const fail = msg => { console.error('  ✗ ' + msg); errors++; };
 const ok = msg => console.log('  ✓ ' + msg);
 
-const dynasties = JSON.parse(readFileSync(join(ROOT, 'data/dynasties.json'), 'utf8'));
-ok(`dynasties.json 载入 ${dynasties.length} 个朝代`);
-if (dynasties.length !== 6) fail(`期望 6 个朝代，实际 ${dynasties.length}`);
-
 const walk = (c, fn) => (typeof c[0] === 'number' ? fn(c) : c.forEach(x => walk(x, fn)));
-
-for (const d of dynasties) {
-  for (const key of ['id', 'name', 'period', 'snapshotLabel', 'color', 'summary', 'geoFile', 'eventsFile']) {
-    if (!d[key]) fail(`${d.id || '?'} 缺少字段 ${key}`);
-  }
-  if (!/^#[0-9a-fA-F]{6}$/.test(d.color || '')) fail(`${d.id} 颜色格式错误: ${d.color}`);
-
-  const geoPath = join(ROOT, 'data', d.geoFile);
-  if (!existsSync(geoPath)) { fail(`${d.id} 疆域文件不存在: ${d.geoFile}`); continue; }
-  const geo = JSON.parse(readFileSync(geoPath, 'utf8'));
-  if (geo.type !== 'FeatureCollection' || !geo.features.length) fail(`${d.id} GeoJSON 结构错误`);
-  const hasDyn = geo.features.some(f => f.properties?.name === '__dynasty__');
-  if (!hasDyn) fail(`${d.id} 缺少 __dynasty__ 要素`);
+const coordCheck = fc => {
   let bad = 0, n = 0;
-  geo.features.forEach(f => walk(f.geometry.coordinates, ([x, y]) => {
+  fc.features.forEach(f => walk(f.geometry.coordinates, ([x, y]) => {
     n++;
     if (!(x >= -180 && x <= 180 && y >= -90 && y <= 90)) bad++;
   }));
-  if (bad) fail(`${d.id} 有 ${bad}/${n} 个坐标越界`); else ok(`${d.id} 疆域 ${n} 点坐标合法`);
+  return { bad, n };
+};
 
-  const evPath = join(ROOT, 'data', d.eventsFile);
-  if (!existsSync(evPath)) { fail(`${d.id} 事件文件不存在: ${d.eventsFile}`); continue; }
-  const events = JSON.parse(readFileSync(evPath, 'utf8'));
+// ── timeline.json：唯一入口 ─────────────────────────────────
+const tl = JSON.parse(readFileSync(join(ROOT, 'data/timeline.json'), 'utf8'));
+const { range, snapshots, events } = tl;
+if (!(range?.from < range?.to)) fail(`range 非法: ${JSON.stringify(range)}`);
+else ok(`timeline.json range 前${-range.from}年 → ${range.to}年`);
+
+// ── 断面 ────────────────────────────────────────────────────
+let prevYear = -Infinity;
+const allRegimeSpellings = new Map(); // 全局唯一拼写检查
+for (const s of snapshots) {
+  for (const key of ['id', 'year', 'era', 'label', 'note', 'geoFile', 'divisionsFile']) {
+    if (s[key] == null) fail(`断面缺少字段 ${key}: ${JSON.stringify(s.id ?? s)}`);
+  }
+  if (s.year <= prevYear) fail(`${s.id} 断面年份未严格升序（${s.year} ≤ ${prevYear}）`);
+  if (s.year < range.from || s.year > range.to) fail(`${s.id} 年份 ${s.year} 越出 range`);
+  prevYear = s.year;
+
+  if (!Array.isArray(s.regimes) || !s.regimes.length) fail(`${s.id} regimes 为空`);
+  const names = new Set();
+  for (const r of s.regimes || []) {
+    if (!r.name) fail(`${s.id} 政权缺 name`);
+    if (names.has(r.name)) fail(`${s.id} 政权名重复: ${r.name}`);
+    names.add(r.name);
+    if (!/^#[0-9a-fA-F]{6}$/.test(r.color || '')) fail(`${s.id}·${r.name} 颜色格式错误: ${r.color}`);
+    if (typeof r.weak !== 'boolean') fail(`${s.id}·${r.name} weak 须为布尔`);
+    const prev = allRegimeSpellings.get(r.name);
+    if (prev && prev !== r.color) fail(`政权 ${r.name} 跨断面颜色漂移: ${prev} vs ${r.color}`);
+    allRegimeSpellings.set(r.name, r.color);
+  }
+
+  const geoPath = join(ROOT, 'data', s.geoFile);
+  if (!existsSync(geoPath)) { fail(`${s.id} 疆域文件不存在: ${s.geoFile}`); continue; }
+  const geo = JSON.parse(readFileSync(geoPath, 'utf8'));
+  if (geo.type !== 'FeatureCollection' || !geo.features.length) fail(`${s.id} 疆域 GeoJSON 结构错误`);
+  else {
+    const sentinels = new Set();
+    for (const f of geo.features) {
+      const m = /^__regime_(.+)$/.exec(f.properties?.name || '');
+      if (!m) { fail(`${s.id} 疆域哨兵名非法: ${f.properties?.name}`); continue; }
+      if (f.properties.regime !== m[1]) fail(`${s.id} regime 属性与哨兵后缀不一致: ${f.properties.name}`);
+      if (!names.has(m[1])) fail(`${s.id} 疆域哨兵政权 ${m[1]} 不在 regimes[] 中`);
+      sentinels.add(m[1]);
+    }
+    for (const n of names) if (!sentinels.has(n)) fail(`${s.id}·${n} 缺少疆域要素`);
+    const { bad, n } = coordCheck(geo);
+    if (bad) fail(`${s.id} 有 ${bad}/${n} 个坐标越界`);
+    else ok(`${s.id} ${s.label}  政权${geo.features.length} 坐标${n}点合法`);
+  }
+
+  const divPath = join(ROOT, 'data', s.divisionsFile);
+  if (!existsSync(divPath)) { fail(`${s.id} 政区文件不存在: ${s.divisionsFile}`); continue; }
+  const div = JSON.parse(readFileSync(divPath, 'utf8'));
+  if (!div.features?.length) fail(`${s.id} 政区文件为空`);
+  else {
+    let badName = 0, badRegime = 0;
+    for (const f of div.features) {
+      if (!f.properties?.name) badName++;
+      const r = f.properties?.regime;
+      if (r !== '' && !names.has(r)) badRegime++;
+    }
+    if (badName) fail(`${s.id} 有 ${badName} 个政区要素缺 name`);
+    if (badRegime) fail(`${s.id} 有 ${badRegime} 个政区 regime 不明: ${[...new Set(div.features.filter(f => f.properties?.regime && !names.has(f.properties.regime)).map(f => f.properties.regime))].join('/')}`);
+    const { bad, n } = coordCheck(div);
+    if (bad) fail(`${s.id} 政区有 ${bad}/${n} 个坐标越界`);
+    else ok(`${s.id} 政区界 ${div.features.length} 个（regime 归属齐整）`);
+  }
+}
+ok(`断面 ${snapshots.length} 个，政权拼写 ${allRegimeSpellings.size} 个（跨断面颜色稳定）`);
+
+// ── 事件 ────────────────────────────────────────────────────
+{
+  let sorted = true, prev = -Infinity, dup = 0;
   const titles = new Set();
-  let sorted = true, prev = -Infinity;
+  let out = 0, badField = 0;
   for (const e of events) {
-    for (const key of ['year', 'yearLabel', 'title', 'description', 'location']) {
-      if (e[key] == null) fail(`${d.id} 事件「${e.title || '?'}」缺少 ${key}`);
+    for (const key of ['year', 'yearLabel', 'era', 'title', 'description', 'location']) {
+      if (e[key] == null) { fail(`事件「${e.title || '?'}」缺少 ${key}`); badField++; }
     }
     const { lng, lat } = e.location || {};
-    if (typeof lng !== 'number' || !(lng >= 70 && lng <= 140)) fail(`${d.id}「${e.title}」经度异常: ${lng}`);
-    if (typeof lat !== 'number' || !(lat >= 15 && lat <= 58)) fail(`${d.id}「${e.title}」纬度异常: ${lat}`);
-    if (titles.has(e.title)) fail(`${d.id} 事件标题重复: ${e.title}`);
+    if (typeof lng !== 'number' || !(lng >= 70 && lng <= 140) || typeof lat !== 'number' || !(lat >= 15 && lat <= 58)) {
+      fail(`事件「${e.title}」坐标异常: ${lng},${lat}`); badField++;
+    }
+    if (e.year < range.from || e.year > range.to) out++;
+    if (titles.has(e.title)) dup++;
     titles.add(e.title);
     if (e.year < prev) sorted = false;
     prev = e.year;
   }
-  if (!sorted) fail(`${d.id} 事件未按年份排序`);
-  ok(`${d.id} 事件 ${events.length} 条（${events[0]?.yearLabel} → ${events[events.length - 1]?.yearLabel}）`);
-  if (d.divisionsFile) {
-    const divPath = join(ROOT, 'data', d.divisionsFile);
-    if (!existsSync(divPath)) fail(`${d.id} 政区文件不存在: ${d.divisionsFile}`);
-    else {
-      const div = JSON.parse(readFileSync(divPath, 'utf8'));
-      if (!div.features?.length) fail(`${d.id} 政区文件为空`);
-      else if (div.features.some(f => !f.properties?.name)) fail(`${d.id} 政区要素缺 name`);
-      else ok(`${d.id} 政区界 ${div.features.length} 个`);
-    }
-  }
+  if (!sorted) fail('事件未按年份排序');
+  if (dup) fail(`事件标题重复 ${dup} 条`);
+  if (out) fail(`有 ${out} 条事件年份越出 range`);
+  if (!badField) ok(`事件 ${events.length} 条（${events[0]?.yearLabel} → ${events[events.length - 1]?.yearLabel}，升序无重复）`);
 }
 
+// ── 对照底图三件 ────────────────────────────────────────────
 const modern = JSON.parse(readFileSync(join(ROOT, 'data/geo/modern.json'), 'utf8'));
 if (!modern.features.some(f => f.properties?.name === '__modern__')) fail('modern.json 缺少 __modern__ 要素');
 else ok('modern.json 现代轮廓就绪');
@@ -72,11 +121,11 @@ else ok('modern.json 现代轮廓就绪');
 const neighbors = JSON.parse(readFileSync(join(ROOT, 'data/geo/neighbors.json'), 'utf8'));
 if (!neighbors.features.some(f => f.properties?.name === '__neighbors__')) fail('neighbors.json 缺少 __neighbors__ 要素');
 else if (neighbors.features.some(f => f.properties?.country === 'China')) fail('neighbors.json 不应包含中国本体');
-else ok('neighbors.json 邻国底图就绪（' + neighbors.features.length + ' 国');
+else ok(`neighbors.json 邻国底图就绪（${neighbors.features.length} 国）`);
 
 const provinces = JSON.parse(readFileSync(join(ROOT, 'data/geo/provinces.json'), 'utf8'));
-if (!provinces.features.some(f => f.properties?.name === '__provinces__')) fail('provinces.json \u7f3a\u5c11 __provinces__ \u8981\u7d20');
-else ok('provinces.json \u7701\u754c\u5c31\u7eea\uff08' + provinces.features.length + ' \u4e2a\u7701\u7ea7\u653f\u533a\uff09');
+if (!provinces.features.some(f => f.properties?.name === '__provinces__')) fail('provinces.json 缺少 __provinces__ 要素');
+else ok(`provinces.json 省界就绪（${provinces.features.length} 个省级政区）`);
 
 if (errors) { console.error(`\n共 ${errors} 个问题`); process.exit(1); }
 console.log('\n数据自检全部通过');

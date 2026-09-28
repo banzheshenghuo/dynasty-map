@@ -9,40 +9,62 @@
 
 ```
 data/
-├── dynasties.json      朝代索引（入口）
-├── geo/{id}.json       历史疆域面（id ∈ qin han_w tang yuan ming qing）
-├── geo/{id}-div.json   本朝政区界
-├── geo/modern.json     现代国界（对照底图）
-├── geo/provinces.json  现代省界
-├── geo/neighbors.json  周边现代国界
-└── events/{id}.json    历史事件
+├── timeline.json          时间轴索引（唯一入口：断面 + 事件）
+├── geo/s{id}.json         断面疆域面（多政权并立时多个 feature）
+├── geo/s{id}-div.json     断面政区界
+├── geo/modern.json        现代国界（对照底图）
+├── geo/provinces.json     现代省界
+└── geo/neighbors.json     周边现代国界
 ```
 
-## dynasties.json — 朝代索引
+断面 id 形如 `sbc221` / `s780` / `s1911`：`s` + 可选 `bc`（公元前）+ 公元年份数值。
+时间轴在断面间连续拖动，前端吸附最近断面；`range` 之外无数据。
 
-数组，每代一条：
+## timeline.json — 时间轴索引
 
-- `id` / `name` / `en` / `period` / `snapshotLabel` / `summary`：内容元数据
-- `color`：**表现层元数据**（疆域填充与强调色，`#RRGGBB`），迁移时可按需取舍
-- `geoFile` / `eventsFile`：相对 `data/` 的文件指针
-- `divisionsFile`：同上，但**可缺省**（无政区图层的朝代）
+顶层 `{ range, snapshots, events }`：
 
-## geo/{id}.json — 历史疆域面
+- `range`：`{ from, to }` 断面年份范围（负数即公元前，下同）
+- `snapshots[]`：按 `year` 严格升序，不许重复年份
+- `events[]`：跨断面按上游朝代标签合并、按标题去重，按 `year` 升序
 
-FeatureCollection，恰 1 个 feature：
+### snapshots[] 每条
 
-- `properties.name = "__dynasty__"`（哨兵值，图层识别用）
-- `properties.layer = "dynasty"`；`properties.source` 为来源注记
-- `geometry`: MultiPolygon，坐标 **2 位小数**（≈1km 精度）
+- `id` / `year` / `era` / `label` / `note`：内容元数据；`era` 供时间轴分段聚合展示
+- `regimes[]`：该断面的政权列表（多政权并立时 >1）
+  - `name`：政权名，全局唯一拼写——跨断面同名即同政权（着色稳定的前提）
+  - `color`：**表现层元数据**（`#RRGGBB`，跨断面稳定），迁移时可按需取舍
+  - `weak`：边缘政权（游牧/藩属等，渲染更淡、不参与政区归属）
+- `geoFile` / `divisionsFile`：相对 `data/` 的文件指针
 
-## geo/{id}-div.json — 本朝政区界
+### events[] 每条
+
+- `year` / `yearLabel`（如 `前214年`）/ `era` / `title` / `description`
+- `location`：`{ name, lng, lat }`，校验范围 lng∈[70,140]、lat∈[15,58]；
+  `year` 须落在 `range` 内
+- `tag`：事件类型，当前前端未消费，保留待扩展
+- `sig`：显著度，**仅供构建期筛选**，前端不消费
+
+## geo/s{id}.json — 断面疆域面
+
+FeatureCollection，每政权恰 1 个 feature（≥1），与 `regimes[]` 一一对应：
+
+- `properties.name = "__regime_{政权名}"`（哨兵前缀 + 政权名）
+- `properties.layer = "dynasty"`；`properties.regime` 与哨兵后缀一致
+- `properties.source` 为来源注记
+- `geometry`：MultiPolygon，坐标 **2 位小数**（≈1km 精度）
+
+## geo/s{id}-div.json — 断面政区界
 
 FeatureCollection，多个 feature：
 
 - `properties.name`：真实政区名（悬浮提示与标注用，非哨兵值）
 - `properties.layer = "division"`；`properties.type` ∈ 郡/州/路/府（可为空串）
-- `geometry`: Polygon | MultiPolygon，2 位小数
-- 覆盖不完整是已知现状（早期朝代受上游数字化进度限制），非契约要求
+- `properties.regime`：归属政权名，取值对齐同断面 `regimes[].name`；
+  空串 = 未归属（极少数无法判定者）
+- `geometry`：Polygon | MultiPolygon，2 位小数
+- 覆盖不完整是已知现状（早期朝代受上游数字化进度限制），非契约要求；
+  治所 Voronoi 胞元仅为示意性兜底
 
 ## 对照底图三件
 
@@ -52,26 +74,16 @@ FeatureCollection，多个 feature：
 | provinces.json | `__provinces__` | `provinces` | `province`（省名） | 2 位 |
 | neighbors.json | `__neighbors__` | `neighbors` | `country`（国名，不含 China） | 2 位 |
 
-## events/{id}.json — 历史事件
-
-数组，按 `year` 升序：
-
-- `year`：数值，负数即公元前
-- `yearLabel`：展示串（如 `前214年`）；`title` / `description`：文案
-- `location`：`{ name, lng, lat }`，校验范围 lng∈[70,140]、lat∈[15,58]
-- `tag`：事件类型，当前前端未消费，保留待扩展
-- `sig`：显著度，**仅供构建期筛选**（`build-data.mjs` 取每代前 12 条），前端不消费
-
 ## 图层识别约定
 
 前端把多个 FeatureCollection 合并后按 `properties` 判别图层：
 
-- 4 个哨兵名（`__` 前缀）：`__dynasty__` / `__modern__` / `__provinces__` / `__neighbors__`
+- 哨兵名（`__` 前缀）：`__regime_*` / `__modern__` / `__provinces__` / `__neighbors__`
 - 政区要素无哨兵名，以 `layer = "division"` 判别
 
 ## 消费方
 
-- `src/main.js`：索引 + 事件；`src/map.js`：疆域 + 政区（Map 缓存，政区加载失败
-  静默降级为无政区层并 `console.warn`）
+- `src/main.js`：timeline 索引 + 事件；`src/map.js`：断面疆域 + 政区
+  （按需懒加载断面文件，政区加载失败静默降级为无政区层并 `console.warn`）
 - `node tools/validate.mjs`：结构 / 字段 / 坐标范围 / 文件引用完整性自检
 - `node tools/build-data.mjs`：远程源 → 本目录的生成管线，产物已提交，可复现

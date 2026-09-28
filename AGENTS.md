@@ -7,10 +7,11 @@
 
 - `data/` 是技术栈中立的静态 JSON/GeoJSON，字段、哨兵值、精度口径以 data/SCHEMA.md 为准
 - 数据变更一律走 `tools/build-data.mjs` 管线（含为其新增静态源文件），**禁止手改生成文件**
-  - 例外：`data/geo/qin.json` 同时是手绘疆域的源文件，build 读取其要素参与并集后回写
+  - 手绘疆域轮廓的源文件在 `tools/sources/hand-*.json` 与 `outline-*.json`，
+    属静态源可直接编辑；改后重跑 build 落入 `data/geo/s*.json`
 - 契约变更（增删字段 / 哨兵值 / 精度）必须同步 data/SCHEMA.md 与 tools/validate.mjs，
   「数据 · 契约文档 · 校验器」三者一致才算完成
-- 表现层参数（颜色等）只放 `dynasties.json`；渲染库专用字段不得写进 geo 数据文件
+- 表现层参数（颜色等）只放 `timeline.json` 的 regimes[].color；渲染库专用字段不得写进 geo 数据文件
 - 政区/疆域覆盖不完整属已知现状（上游数字化进度所致），补数据优先接权威源
   （CHGIS 各历史断面），并保持许可表（README）同步更新
 
