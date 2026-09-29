@@ -299,21 +299,146 @@ body {
 }
 .evt-item.selected .evt-desc { display: block; }
 
-/* ── 底栏时间轴：卷尾 · noUiSlider 内核 + 自绘装饰层 ───── */
+/* ── 底栏时间轴：卷尾 · 两级离散导航（时代条 + 断面切片）── */
 .app-footer {
   flex: none;
   border-top: 3px double var(--line);
   background: var(--paper-light);
 }
 
-#timeline { padding: 10px 22px 6px; }
+#timeline { padding: 10px 22px 8px; }
 
-/* 控制组：播放/步进 + 大号年份读数（Paradox 式，年份常显） */
+/* 行1：时代条（时长成比例的分段按钮 + 大事打点层） */
+.tl-eras {
+  position: relative;
+  height: 34px;
+}
+.tl-segs {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--paper-light);
+}
+.tl-seg {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  border: none;
+  padding: 0;
+  font-family: var(--serif);
+  font-size: 11.5px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  color: rgba(59, 50, 38, 0.8);
+  background: var(--seg-color, transparent);
+  cursor: pointer;
+  transition: filter 0.15s;
+  touch-action: manipulation;
+}
+.tl-seg span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tl-seg.tiny span { visibility: hidden; } /* 窄段只留色块，名称见 title 悬浮 */
+.tl-seg:not(:first-child)::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 16%; bottom: 16%;
+  width: 1px;
+  background: var(--line);
+}
+.tl-seg:hover { filter: brightness(0.92); }
+.tl-seg.cur {
+  box-shadow: inset 0 -3px 0 rgba(59, 50, 38, 0.42);
+  filter: brightness(0.96);
+}
+.tl-seg.cur span { font-weight: 600; letter-spacing: 2px; }
+
+/* 大事打点：朱砂小圆（史=朱），纸色描边，点击跨时代跳转 */
+.tl-dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.tl-dot {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  opacity: 0.55;
+  box-shadow: 0 0 0 1.5px rgba(246, 238, 217, 0.75);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.12s, opacity 0.12s;
+}
+.tl-dot::after {
+  content: '';
+  position: absolute;
+  inset: -7px; /* 扩大点按热区 */
+}
+.tl-dot:hover {
+  opacity: 1;
+  transform: scale(1.55);
+}
+
+/* 行2：当前时代的断面切片 + 步进/播放 + 大号年份读数 */
+.tl-sub {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 7px;
+}
+.tl-slices {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1;
+  padding: 2px;
+}
+.tl-slices::-webkit-scrollbar { display: none; }
+.tl-slice {
+  flex: none;
+  padding: 3px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--serif);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  touch-action: manipulation;
+}
+.tl-slice:hover { color: var(--cinnabar); border-color: var(--cinnabar); }
+.tl-slice.on {
+  background: var(--cinnabar);
+  border-color: var(--cinnabar);
+  color: var(--paper-light);
+  font-weight: 600;
+}
+
+/* 步进/播放控制 + 大号年份读数（Paradox 式，年份常显） */
 .tl-ctl {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 4px;
+  flex: none;
+  margin-left: auto;
 }
 .tl-btn {
   width: 27px;
@@ -327,6 +452,7 @@ body {
   color: var(--ink-soft);
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
+  touch-action: manipulation;
 }
 .tl-btn:hover { color: var(--cinnabar); border-color: var(--cinnabar); }
 .tl-btn svg { width: 11px; height: 11px; fill: currentColor; }
@@ -352,228 +478,6 @@ body {
   font-size: 14px;
   color: var(--ink-soft);
   letter-spacing: 2px;
-}
-
-.tl-wrap {
-  position: relative;
-  height: 48px;
-  touch-action: none; /* 手势交给滑杆，不滚动页面 */
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* 展示层顺序：slider（拖拽，底）→ deco（色条/刻度，不拦）→ dots（可点）→ ghost → bubble */
-.tl-deco { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
-
-/* 时代分段条：底色为时代主政权色淡化，与拖拽轨道重合 */
-.tl-segs {
-  position: absolute;
-  left: 0; right: 0; top: 10px; bottom: 18px;
-  display: flex;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  overflow: hidden;
-  background: var(--paper-light);
-}
-.tl-seg {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  font-size: 11px;
-  letter-spacing: 1px;
-  white-space: nowrap;
-  color: rgba(59, 50, 38, 0.8);
-  background: var(--seg-color, transparent);
-  transition: filter 0.15s;
-}
-.tl-seg span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tl-seg.tiny span { visibility: hidden; } /* 窄段只留色块，名称见 title 悬浮 */
-.tl-seg:not(:first-child)::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 16%; bottom: 16%;
-  width: 1px;
-  background: var(--line);
-}
-.tl-seg.cur { box-shadow: inset 0 -3px 0 rgba(59, 50, 38, 0.38); }
-.tl-seg.cur span { font-weight: 600; }
-
-/* ── noUiSlider 结构样式（不用官方 css，按书卷主题重写）── */
-.tl-slider {
-  position: absolute;
-  left: 0; right: 0; top: 10px; bottom: 18px; /* 与分段带重合 */
-  z-index: 1;
-  cursor: pointer;
-}
-.tl-slider.noUi-target,
-.tl-slider .noUi-base {
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  height: 100%;
-  margin: 0;
-  box-shadow: none;
-}
-.tl-slider .noUi-connects,
-.tl-slider .noUi-connect { background: transparent; }
-.tl-slider .noUi-origin {
-  /* 手柄吸附/点击锚定时平滑滑动；拖动中（.noUi-state-drag）跟手不动画 */
-  transition: transform 0.25s cubic-bezier(0.3, 0.7, 0.3, 1);
-}
-.tl-slider.noUi-state-drag .noUi-origin { transition: none; }
-.tl-slider .noUi-handle {
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 0;
-  border: none;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
-  cursor: grab;
-  outline: none;
-}
-.tl-slider.noUi-state-drag .noUi-handle { cursor: grabbing; }
-.tl-slider .noUi-handle:focus-visible::before {
-  box-shadow: 0 0 0 1px rgba(246, 238, 217, 0.6), 0 0 0 3px rgba(158, 61, 44, 0.4);
-}
-/* 朱砂立杆（上探出带顶至轴顶）+ 骑在带中线上的圆钮 */
-.tl-slider .noUi-handle::before {
-  content: '';
-  position: absolute;
-  left: -1px;
-  top: -6px;
-  bottom: calc(50% - 5px);
-  width: 2px;
-  border-radius: 1px;
-  background: var(--cinnabar);
-  box-shadow: 0 0 0 1px rgba(246, 238, 217, 0.6);
-}
-.tl-slider .noUi-handle::after {
-  content: '';
-  position: absolute;
-  left: -6.5px;
-  bottom: calc(50% - 6.5px);
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: var(--cinnabar);
-  border: 2px solid var(--paper-light);
-  box-shadow: 0 1px 4px rgba(80, 60, 30, 0.4);
-}
-/* 手柄热区：扩到整条立杆附近 */
-.tl-slider .noUi-touch-area { position: absolute; inset: -10px -14px -6px; }
-
-/* 断面刻度：吸附落点 */
-.tl-tick {
-  position: absolute;
-  bottom: 8px;
-  width: 1px;
-  height: 5px;
-  margin-left: -0.5px;
-  background: var(--ink-faint);
-  opacity: 0.4;
-}
-.tl-tick.on {
-  width: 3px;
-  height: 7px;
-  margin-left: -1.5px;
-  bottom: 7px;
-  border-radius: 1px;
-  background: var(--cinnabar);
-  opacity: 1;
-}
-/* 磁吸回应：手柄接近断面刻度时放大提示可吸附落点 */
-.tl-tick.near {
-  width: 3px;
-  height: 9px;
-  margin-left: -1.5px;
-  bottom: 6px;
-  background: var(--cinnabar);
-  opacity: 0.85;
-}
-
-/* 事件打点层：独立于拖拽层，可点 */
-.tl-dots { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
-.tl-dot {
-  position: absolute;
-  bottom: calc(50% - 8px);
-  width: 6px;
-  height: 6px;
-  margin-left: -3px;
-  border-radius: 50%;
-  background: var(--cinnabar);
-  opacity: 0.55;
-  box-shadow: 0 0 0 1.5px rgba(246, 238, 217, 0.75);
-  pointer-events: auto;
-  cursor: pointer;
-  transition: transform 0.12s, opacity 0.12s;
-}
-.tl-dot::after {
-  content: '';
-  position: absolute;
-  inset: -6px; /* 扩大点按热区 */
-}
-.tl-dot:hover {
-  opacity: 1;
-  transform: scale(1.55);
-}
-
-/* 悬浮预览：虚线指针 + 小年份签（仅鼠标设备） */
-.tl-ghost {
-  position: absolute;
-  top: 6px;
-  bottom: 2px;
-  width: 0;
-  border-left: 1px dashed rgba(59, 50, 38, 0.35);
-  pointer-events: none;
-  z-index: 4;
-}
-.tl-ghost-year {
-  position: absolute;
-  top: -21px;
-  left: 0;
-  transform: translateX(-50%);
-  padding: 1px 7px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: rgba(246, 238, 217, 0.92);
-  color: var(--ink-soft);
-  font-size: 10.5px;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-/* 年份标尺：轴下一行淡墨刻度 */
-.tl-years {
-  position: relative;
-  height: 15px;
-  margin-top: 3px;
-  font-size: 10px;
-  color: var(--ink-faint);
-  letter-spacing: 0.5px;
-  font-variant-numeric: tabular-nums;
-}
-.tl-years i {
-  position: absolute;
-  top: 0;
-  transform: translateX(-50%);
-  font-style: normal;
-}
-.tl-years i:first-child { transform: none; }
-.tl-years i:last-child { transform: translateX(-100%); }
-
-.disclaimer {
-  text-align: center;
-  font-size: 10.5px;
-  color: var(--ink-faint);
-  padding: 2px 16px 8px;
-  letter-spacing: 0.5px;
 }
 
 /* 地图 tooltip：纸片小签 */
@@ -610,18 +514,19 @@ body {
   #map { flex: 1; min-height: 0; }
 
   /* 时间轴：贴边留白收窄、控制按钮放大触控目标 */
-  #timeline { padding: 8px 14px 2px; }
-  .tl-ctl { gap: 9px; margin-bottom: 2px; }
+  #timeline { padding: 8px 14px 4px; }
+  .tl-eras { height: 38px; }
+  .tl-seg { font-size: 11px; }
+  .tl-dot { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; }
+  .tl-sub { gap: 8px; margin-top: 6px; }
+  .tl-slice { padding: 4px 10px; font-size: 11px; }
+  .tl-ctl { gap: 7px; }
   .tl-btn { width: 34px; height: 32px; }
   .tl-btn svg { width: 13px; height: 13px; }
   .tl-btn-play { width: 40px; }
-  .tl-readout { margin-left: 4px; }
+  .tl-readout { margin-left: 2px; }
   .tl-readout .tl-year { font-size: 17px; }
   .tl-readout .tl-era { font-size: 13px; }
-  .tl-wrap { height: 54px; }
-  .tl-slider { top: 10px; bottom: 18px; }
-  .tl-seg { font-size: 10.5px; }
-  .tl-years { height: 14px; font-size: 9.5px; }
 
   .disclaimer {
     font-size: 10px;
