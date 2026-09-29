@@ -9,8 +9,6 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  # configure-pages enablement 建站需要：POST /pages 属仓库管理操作
-  administration: write
 
 concurrency:
   group: pages
@@ -31,9 +29,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - uses: actions/configure-pages@v5
-        # Pages 站点不存在时自动创建（如站点被误删，防部署直接失败）
-        with:
-          enablement: true
+        # 站点若被删，enablement 建站会因 GITHUB_TOKEN 无仓库管理权限而失败
+        # （Resource not accessible by integration）——届时用管理令牌手动
+        # gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow 重建
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
