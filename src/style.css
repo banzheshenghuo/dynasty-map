@@ -299,138 +299,116 @@ body {
 }
 .evt-item.selected .evt-desc { display: block; }
 
-/* ── 底栏时间轴：卷尾 · 两级离散导航（时代条 + 断面切片）── */
+/* ── 底栏时间轴：胶片条 · 等距节点横向滚动（滚动只浏览，点击节点才切图）── */
 .app-footer {
   flex: none;
   border-top: 3px double var(--line);
   background: var(--paper-light);
 }
 
-#timeline { padding: 10px 22px 8px; }
+#timeline { padding: 8px 18px 6px; }
 
-/* 行1：时代条（时长成比例的分段按钮 + 大事打点层） */
-.tl-eras {
-  position: relative;
-  height: 34px;
-}
-.tl-segs {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  overflow: hidden;
-  background: var(--paper-light);
-}
-.tl-seg {
-  position: relative;
+.tl-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  min-width: 0;
-  border: none;
-  padding: 0;
-  font-family: var(--serif);
-  font-size: 11.5px;
-  letter-spacing: 1px;
-  white-space: nowrap;
-  color: rgba(59, 50, 38, 0.8);
-  background: var(--seg-color, transparent);
-  cursor: pointer;
-  transition: filter 0.15s;
-  touch-action: manipulation;
-}
-.tl-seg span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tl-seg.tiny span { visibility: hidden; } /* 窄段只留色块，名称见 title 悬浮 */
-.tl-seg:not(:first-child)::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 16%; bottom: 16%;
-  width: 1px;
-  background: var(--line);
-}
-.tl-seg:hover { filter: brightness(0.92); }
-.tl-seg.cur {
-  box-shadow: inset 0 -3px 0 rgba(59, 50, 38, 0.42);
-  filter: brightness(0.96);
-}
-.tl-seg.cur span { font-weight: 600; letter-spacing: 2px; }
-
-/* 大事打点：朱砂小圆（史=朱），纸色描边，点击跨时代跳转 */
-.tl-dots {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2;
-}
-.tl-dot {
-  position: absolute;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
-  border-radius: 50%;
-  background: var(--cinnabar);
-  opacity: 0.55;
-  box-shadow: 0 0 0 1.5px rgba(246, 238, 217, 0.75);
-  pointer-events: auto;
-  cursor: pointer;
-  transition: transform 0.12s, opacity 0.12s;
-}
-.tl-dot::after {
-  content: '';
-  position: absolute;
-  inset: -7px; /* 扩大点按热区 */
-}
-.tl-dot:hover {
-  opacity: 1;
-  transform: scale(1.55);
+  gap: 16px;
 }
 
-/* 行2：当前时代的断面切片 + 步进/播放 + 大号年份读数 */
-.tl-sub {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 7px;
-}
-.tl-slices {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+/* 节点带视口：限宽即滚动区，纵滚轮转横滚，两端渐隐提示可续览 */
+.tl-strip {
+  flex: 1;
   min-width: 0;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
-  flex: 1;
-  padding: 2px;
+  user-select: none;
+  cursor: grab;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 20px, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(90deg, transparent 0, #000 20px, #000 calc(100% - 20px), transparent);
 }
-.tl-slices::-webkit-scrollbar { display: none; }
-.tl-slice {
-  flex: none;
-  padding: 3px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink-soft);
+.tl-strip::-webkit-scrollbar { display: none; }
+.tl-strip.panning,
+.tl-strip.panning .tl-node { cursor: grabbing; }
+
+.tl-track {
+  position: relative; /* 节点 offsetLeft 以此为基准，供滚动回中计算 */
+  display: flex;
+  width: max-content;
+}
+.tl-group { flex: none; }
+.tl-gcap {
+  display: block;
+  height: 17px;
+  padding: 0 3px;
+  border: none;
+  background: none;
   font-family: var(--serif);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.5px;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  line-height: 17px;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--gcap-color, var(--ink-soft));
+  opacity: 0.85;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
   touch-action: manipulation;
 }
-.tl-slice:hover { color: var(--cinnabar); border-color: var(--cinnabar); }
-.tl-slice.on {
+.tl-gcap:hover { opacity: 1; color: var(--cinnabar); }
+.tl-group.cur .tl-gcap { font-weight: 700; opacity: 1; }
+
+.tl-gnodes { display: flex; }
+.tl-node {
+  position: relative;
+  flex: 0 0 70px; /* 等距步长 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 0 6px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+/* 轴线：过节点圆心（上内边距 5px + 半径 4.5px），组间无缝拼接 */
+.tl-node::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  top: 9px;
+  height: 1px;
+  background: var(--line);
+}
+.tl-node:first-child::before { left: 50%; } /* 带端截半，避免线头戳出 */
+.tl-node:last-child::before { right: 50%; }
+.tl-tick {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--n-color);
+  background: var(--paper-light);
+  box-sizing: border-box;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+.tl-ylab {
+  font-family: var(--serif);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.tl-node:hover .tl-tick { background: var(--n-color); }
+.tl-node:hover .tl-ylab { color: var(--ink-soft); }
+.tl-node:focus-visible .tl-tick { box-shadow: 0 0 0 3px rgba(158, 61, 44, 0.25); }
+.tl-node.on .tl-tick {
   background: var(--cinnabar);
   border-color: var(--cinnabar);
-  color: var(--paper-light);
-  font-weight: 600;
+  box-shadow: 0 0 0 3px rgba(158, 61, 44, 0.18);
+  transform: scale(1.12);
 }
+.tl-node.on .tl-ylab { color: var(--cinnabar); font-weight: 700; }
 
 /* 步进/播放控制 + 大号年份读数（Paradox 式，年份常显） */
 .tl-ctl {
@@ -438,7 +416,6 @@ body {
   align-items: center;
   gap: 6px;
   flex: none;
-  margin-left: auto;
 }
 .tl-btn {
   width: 27px;
@@ -513,20 +490,23 @@ body {
 
   #map { flex: 1; min-height: 0; }
 
-  /* 时间轴：贴边留白收窄、控制按钮放大触控目标 */
-  #timeline { padding: 8px 14px 4px; }
-  .tl-eras { height: 38px; }
-  .tl-seg { font-size: 11px; }
-  .tl-dot { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; }
-  .tl-sub { gap: 8px; margin-top: 6px; }
-  .tl-slice { padding: 4px 10px; font-size: 11px; }
-  .tl-ctl { gap: 7px; }
+  /* 时间轴：控制行独占一行，节点带满宽横滑；触控目标放大 */
+  #timeline { padding: 6px 12px 4px; }
+  .tl-row { flex-wrap: wrap; gap: 4px; }
+  .tl-ctl { width: 100%; gap: 7px; }
   .tl-btn { width: 34px; height: 32px; }
   .tl-btn svg { width: 13px; height: 13px; }
   .tl-btn-play { width: 40px; }
-  .tl-readout { margin-left: 2px; }
+  .tl-readout { margin-left: auto; }
   .tl-readout .tl-year { font-size: 17px; }
   .tl-readout .tl-era { font-size: 13px; }
+  .tl-strip {
+    flex-basis: 100%;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent);
+    mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent);
+  }
+  .tl-node { flex-basis: 58px; }
+  .tl-gcap, .tl-ylab { font-size: 10.5px; }
 
   .disclaimer {
     font-size: 10px;

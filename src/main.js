@@ -151,12 +151,9 @@ async function boot() {
       : 0;
 
   state.tl = createTimeline($('#timeline'), {
-    range: tl.range,
     eras: tl.eras,
     snapshots: tl.snapshots,
-    events: tl.events,
     onSnap: snap => switchSnapshot(state.snapshots.indexOf(snap)),
-    onEvent: evt => handleEventClick(evt, { fromMap: true }),
   });
 
   $('#modern-toggle').addEventListener('change', e => setModernVisible(e.target.checked));
