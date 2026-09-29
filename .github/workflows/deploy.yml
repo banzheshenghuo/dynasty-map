@@ -9,6 +9,8 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  # configure-pages enablement 建站需要：POST /pages 属仓库管理操作
+  administration: write
 
 concurrency:
   group: pages
