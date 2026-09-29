@@ -1,7 +1,8 @@
-// 时间轴：noUiSlider 托管拖拽内核（点击锚定/拖动/键盘/ARIA），装饰层自绘——
-// 时代分段色条 + 断面刻度 + 事件打点 + 悬浮年份预览 + 读数气泡。
-// 统一事件管线：拖动/点击/滚轮/程序设置都走 slider update——跨断面边界即换图
-// （400ms 节流，连续扫过不闪），松手立即吸附最近断面
+// 时间轴：noUiSlider 托管拖拽内核 + 播放控制 + 大号年份读数。
+// 参考市面历史地图范式（Chronas/Paradox/全历史）：当前年份大号常显、
+// 播放/暂停/步进按钮看疆域演变、手柄接近断面刻度时磁吸回应。
+// 统一 update 管线：拖动/点击/滚轮/程序设置都走 slider update——
+// 跨断面边界即换图（400ms 节流，快速扫过不闪）；外部离散指令即时换图
 import noUiSlider from 'nouislider';
 
 export const yearLabel = y => (y < 0 ? `前${-y}年` : `${y}年`);
@@ -9,6 +10,14 @@ export const yearLabel = y => (y < 0 ? `前${-y}年` : `${y}年`);
 const hexA = (hex, a) => {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+};
+
+// 控制按钮的内联 SVG（fill: currentColor，随主题变色）
+const SVG = {
+  play: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1l8 5-8 5z"/></svg>',
+  pause: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1h2.6v10H2.5zM6.9 1h2.6v10H6.9z"/></svg>',
+  prev: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M9.5 1v10L2.5 6z"/></svg>',
+  next: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1v10l7-5z"/></svg>',
 };
 
 export function createTimeline(container, { range, eras, snapshots, events, onSnap, onEvent }) {
@@ -37,8 +46,16 @@ export function createTimeline(container, { range, eras, snapshots, events, onSn
     return [];
   })();
 
-  // DOM：slider 为拖拽层（底层），deco/dots/ghost/bubble 为展示层（上层）
+  // DOM：控制组（播放/步进/大读数）在带上方；slider 为拖拽层，deco/dots/ghost 为展示层
   container.innerHTML = `
+    <div class="tl-ctl">
+      <button type="button" class="tl-btn tl-btn-play" aria-label="播放年代演变">${SVG.play}</button>
+      <button type="button" class="tl-btn" aria-label="上一断面">${SVG.prev}</button>
+      <button type="button" class="tl-btn" aria-label="下一断面">${SVG.next}</button>
+      <div class="tl-readout" aria-live="polite">
+        <span class="tl-year"></span><span class="tl-era"></span>
+      </div>
+    </div>
     <div class="tl-wrap">
       <div class="tl-deco">
         <div class="tl-segs">${eras
@@ -62,7 +79,6 @@ export function createTimeline(container, { range, eras, snapshots, events, onSn
         )
         .join('')}</div>
       <div class="tl-ghost" hidden><span class="tl-ghost-year"></span></div>
-      <div class="tl-bubble"></div>
     </div>
     <div class="tl-years">${yearTicks
       .map(y => `<i style="left:${pctOf(y)}%">${y < 0 ? '前' + -y : y}</i>`)
@@ -70,46 +86,80 @@ export function createTimeline(container, { range, eras, snapshots, events, onSn
 
   const wrap = container.querySelector('.tl-wrap');
   const sliderEl = container.querySelector('.tl-slider');
+  const btnPlay = container.querySelector('.tl-btn-play');
+  const btnPrev = container.querySelectorAll('.tl-btn')[1];
+  const btnNext = container.querySelectorAll('.tl-btn')[2];
+  const readYear = container.querySelector('.tl-year');
+  const readEra = container.querySelector('.tl-era');
   const segEls = Array.from(container.querySelectorAll('.tl-seg'));
   const tickEls = Array.from(container.querySelectorAll('.tl-tick'));
   const ghostEl = container.querySelector('.tl-ghost');
   const ghostYear = container.querySelector('.tl-ghost-year');
-  const bubble = container.querySelector('.tl-bubble');
   const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   const shortYear = y => (y < 0 ? `前${Math.round(-y)}` : String(Math.round(y)));
 
-  // 展示同步：手柄位置由 noUiSlider 管理，这里只跟气泡/分段高亮/aria 文案
+  // 展示同步：大读数 + 当前时代分段高亮 + 磁吸回应（手柄 ±13 年内的断面刻度放大）
+  const NEAR_YEARS = Math.max(8, span * 0.006);
   function setVisuals(year) {
     const y = clampYear(year);
-    const w = wrap.clientWidth;
-    const px = Math.min(w - 46, Math.max(46, (pctOf(y) / 100) * w));
-    bubble.style.left = px + 'px';
-    bubble.textContent = `${yearLabel(Math.round(y))} · ${eraOf(y).name}`;
+    readYear.textContent = yearLabel(Math.round(y));
+    readEra.textContent = eraOf(y).name;
     segEls.forEach(el => el.classList.toggle('cur', el.dataset.era === eraOf(y).name));
+    let nearIdx = -1, bd = NEAR_YEARS;
+    snapshots.forEach((s, i) => {
+      const d = Math.abs(s.year - y);
+      if (d < bd) { bd = d; nearIdx = i; }
+    });
+    tickEls.forEach((el, i) => el.classList.toggle('near', i === nearIdx));
   }
 
   // 换图调度：跨断面边界即请求换图，400ms 节流——快速扫过只换停留断面，慢速拖动每 400ms 跟上一帧
   let lastFired = -1;
   let lastTickOn = -1;
   let fireTimer = null;
+  function markTick(idx) {
+    if (lastTickOn >= 0) tickEls[lastTickOn]?.classList.remove('on');
+    tickEls[idx]?.classList.add('on');
+    lastTickOn = idx;
+  }
   function requestSnap(idx) {
     if (idx === lastFired) return;
     clearTimeout(fireTimer);
     fireTimer = setTimeout(() => {
+      if (idx === lastFired) return; // fireNow 已抢先处理
       lastFired = idx;
-      if (tickEls[lastTickOn]) tickEls[lastTickOn].classList.remove('on');
-      tickEls[idx]?.classList.add('on');
-      lastTickOn = idx;
+      markTick(idx);
       onSnap(snapshots[idx], idx);
     }, 400);
   }
   function fireNow(idx) {
     clearTimeout(fireTimer);
     lastFired = idx;
-    if (tickEls[lastTickOn]) tickEls[lastTickOn].classList.remove('on');
-    tickEls[idx]?.classList.add('on');
-    lastTickOn = idx;
+    markTick(idx);
     onSnap(snapshots[idx], idx);
+  }
+
+  // ── 播放：沿断面每 1.6s 步进，播完自动停；任何外部干预即停 ──
+  let playing = false;
+  let playTimer = null;
+  function renderPlayBtn() {
+    btnPlay.innerHTML = playing ? SVG.pause : SVG.play;
+    btnPlay.setAttribute('aria-label', playing ? '暂停播放' : '播放年代演变');
+    btnPlay.classList.toggle('playing', playing);
+  }
+  function stopPlay() {
+    if (!playing) return;
+    playing = false;
+    clearTimeout(playTimer);
+    renderPlayBtn();
+  }
+  function tickPlay() {
+    if (!playing) return;
+    const next = lastFired + 1;
+    if (next >= snapshots.length) { stopPlay(); return; }
+    slider.set(snapshots[next].year); // update 同步视觉；fireNow 立即换图
+    fireNow(next);
+    playTimer = setTimeout(tickPlay, 1600);
   }
 
   noUiSlider.create(sliderEl, {
@@ -128,11 +178,6 @@ export function createTimeline(container, { range, eras, snapshots, events, onSn
     },
   });
 
-  // 窄时代段只留色块（名称藏进 title），随布局宽度实时判定
-  new ResizeObserver(() =>
-    segEls.forEach(el => el.classList.toggle('tiny', el.offsetWidth < 46))
-  ).observe(container.querySelector('.tl-deco'));
-
   const slider = sliderEl.noUiSlider;
 
   slider.on('update', (values, _handle, unencoded) => {
@@ -141,6 +186,7 @@ export function createTimeline(container, { range, eras, snapshots, events, onSn
     requestSnap(nearestIdx(y));
   });
   slider.on('start', () => {
+    stopPlay(); // 用户接管，播放即停
     wrap.classList.add('dragging'); // 关闭吸附过渡，读数跟手
     ghostEl.hidden = true;
   });
@@ -187,12 +233,44 @@ export function createTimeline(container, { range, eras, snapshots, events, onSn
     })
   );
 
+  // 控制按钮
+  function jump(idx) {
+    if (idx < 0 || idx >= snapshots.length) return;
+    stopPlay();
+    slider.set(snapshots[idx].year);
+    fireNow(idx);
+  }
+  btnPlay.addEventListener('click', () => {
+    if (playing) { stopPlay(); return; }
+    // 从头播：若已在末断面则回到起点
+    playing = true;
+    renderPlayBtn();
+    if (lastFired >= snapshots.length - 1) jump(0);
+    tickPlay();
+  });
+  btnPrev.addEventListener('click', () => jump(lastFired - 1));
+  btnNext.addEventListener('click', () => jump(lastFired + 1));
+
+  // 空格 = 播放/暂停（输入框/按钮/手柄聚焦时让位）
+  window.addEventListener('keydown', e => {
+    if (e.code !== 'Space') return;
+    const t = e.target;
+    if (t instanceof Element && t.closest('input, textarea, button, .noUi-handle')) return;
+    e.preventDefault();
+    btnPlay.click();
+  });
+
+  // 窄时代段只留色块（名称藏进 title），随布局宽度实时判定
+  new ResizeObserver(() =>
+    segEls.forEach(el => el.classList.toggle('tiny', el.offsetWidth < 46))
+  ).observe(container.querySelector('.tl-deco'));
+
   return {
-    // 外部离散指令（键盘步进/事件点跳转/URL 初始化）立即换图不走节流——
-    // 节流只服务拖动/滚轮的连续 update，否则跳转后 400ms 才切断面会吃掉选中态
+    // 外部离散指令（键盘步进/事件点跳转/URL 初始化）即时换图并停止播放
     setSnap: idx => {
       const s = snapshots[idx];
       if (!s) return;
+      stopPlay();
       slider.set(s.year); // update → setVisuals 同步视觉
       fireNow(idx);
     },
