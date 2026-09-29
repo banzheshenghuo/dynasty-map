@@ -29,6 +29,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - uses: actions/configure-pages@v5
+        # Pages 站点不存在时自动创建（如站点被误删，防部署直接失败）
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
