@@ -87,6 +87,31 @@ for (const s of snapshots) {
     else ok(`${s.id} ${s.label}  政权${geo.features.length} 坐标${n}点合法`);
   }
 
+  // placesFile 可选（据点层：都邑/方国/遗址点位，上古断面为主）
+  if (s.placesFile != null) {
+    const placesPath = join(ROOT, 'data', s.placesFile);
+    if (!existsSync(placesPath)) fail(`${s.id} 据点文件不存在: ${s.placesFile}`);
+    else {
+      const places = JSON.parse(readFileSync(placesPath, 'utf8'));
+      const KINDS = new Set(['都城', '都邑', '方国', '遗址']);
+      let bad = 0;
+      const seen = new Set();
+      for (const f of places.features || []) {
+        const p = f.properties || {};
+        const [lng, lat] = f.geometry?.coordinates || [];
+        if (!p.name || seen.has(p.name)) bad++, fail(`${s.id} 据点 name 缺失或重复: ${p.name}`);
+        seen.add(p.name);
+        if (!KINDS.has(p.kind)) fail(`${s.id}·${p.name} kind 非法: ${p.kind}`);
+        if (p.layer !== 'place') fail(`${s.id}·${p.name} layer 应为 "place"`);
+        if (f.geometry?.type !== 'Point') fail(`${s.id}·${p.name} 几何须为 Point`);
+        if (typeof p.today !== 'string' || !p.today) fail(`${s.id}·${p.name} 缺 today 今地名`);
+        if (!(lng >= 70 && lng <= 140 && lat >= 15 && lat <= 58)) fail(`${s.id}·${p.name} 坐标异常: ${lng},${lat}`);
+      }
+      if (!places.features?.length) fail(`${s.id} 据点文件为空`);
+      else if (!bad) ok(`${s.id} 据点层 ${places.features.length} 个（kind 合法、今地名齐全）`);
+    }
+  }
+
   // divisionsFile 可选（夏商西周上古断面无政区层）
   if (s.divisionsFile == null) continue;
   const divPath = join(ROOT, 'data', s.divisionsFile);
@@ -147,6 +172,31 @@ else ok(`neighbors.json 邻国底图就绪（${neighbors.features.length} 国）
 const provinces = JSON.parse(readFileSync(join(ROOT, 'data/geo/provinces.json'), 'utf8'));
 if (!provinces.features.some(f => f.properties?.name === '__provinces__')) fail('provinces.json 缺少 __provinces__ 要素');
 else ok(`provinces.json 省界就绪（${provinces.features.length} 个省级政区）`);
+
+// ── 现代地名点位（省/市/县驻地，随「现代地名」开关懒加载）────
+{
+  const path = join(ROOT, 'data/geo/places-modern.json');
+  if (!existsSync(path)) fail('places-modern.json 不存在');
+  else {
+    const mp = JSON.parse(readFileSync(path, 'utf8'));
+    const LEVELS = new Set(['province', 'city', 'district']);
+    let bad = 0;
+    const byLevel = {};
+    for (const f of mp.features || []) {
+      const p = f.properties || {};
+      const [lng, lat] = f.geometry?.coordinates || [];
+      if (!p.name || !LEVELS.has(p.level) || typeof p.adcode !== 'number' || p.layer !== 'modern-place') { bad++; continue; }
+      if (f.geometry?.type !== 'Point') { bad++; continue; }
+      // 含三沙市南沙区（南沙群岛 ~9.5°N），纬度下界较事件范围更宽
+      if (!(lng >= 70 && lng <= 140 && lat >= 9 && lat <= 58)) { bad++; fail(`现代地名「${p.name}」坐标异常: ${lng},${lat}`); }
+      byLevel[p.level] = (byLevel[p.level] || 0) + 1;
+    }
+    if (bad) fail(`places-modern.json 有 ${bad} 个非法要素`);
+    else if ((byLevel.province || 0) < 30 || (byLevel.city || 0) < 300 || (byLevel.district || 0) < 2500)
+      fail(`places-modern.json 数量异常: ${JSON.stringify(byLevel)}`);
+    else ok(`places-modern.json ${mp.features.length} 点（省${byLevel.province}/市${byLevel.city}/县${byLevel.district}）`);
+  }
+}
 
 if (errors) { console.error(`\n共 ${errors} 个问题`); process.exit(1); }
 console.log('\n数据自检全部通过');

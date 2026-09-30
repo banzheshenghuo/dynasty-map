@@ -95,8 +95,13 @@ const REGIME_COLORS = {
 const HB = f => ({ kind: 'world', file: f });
 const HAND = f => ({ kind: 'hand', file: f });
 const SNAPSHOTS = [
+  { id: 'sbc1600', year: -1600, era: '商', label: '商 · 成汤居亳',
+    territories: [{ name: '商', ...HAND('hand-shang-early.json') }],
+    places: 'hand-shang-early-places.json',
+    note: '约前1600年（早商二里岗期势力范围推定示意·考古学界共识，无政区层）' },
   { id: 'sbc1200', year: -1200, era: '商', label: '商 · 殷墟时期',
     territories: [{ name: '商', ...HAND('hand-shang.json') }],
+    places: 'hand-shang-places.json',
     note: '约前1200年（谭图第一册网格配准读图·商据点群推定示意，无政区层）' },
   { id: 'sbc221', year: -221, era: '秦', label: '秦 · 统一六国',
     territories: [{ name: '秦', ...HAND('hand-qin.json') }],
@@ -466,7 +471,7 @@ function buildDivisions(cfg, adminTerritories, snapId) {
 
 // ── 时代分段：时间轴底色 + 侧栏时代简介（era 聚合，颜色取首个断面主政权）──
 const ERA_SUMMARY = {
-  '商': '甲骨文与青铜器见证的王朝。盘庚迁殷后王都稳定于安阳一带，商以据点式方式控制四土：西抵岐周、北至冀中、南达江汉盘龙城；本图色块为据点群推定示意。',
+  '商': '甲骨文与青铜器见证的王朝。成汤都亳而立国，前期以郑洛为中心经略四方；盘庚迁殷后王都稳定于安阳一带，以据点式方式控制四土：西抵岐周、北至冀中、南达江汉。本图色块为据点群推定示意。',
   '秦': '结束战国五百年分裂的首个大一统王朝。北逐匈奴取河套、修长城，南平百越设桂林与象郡，书同文、车同轨、行郡县，奠定此后两千年华夏政治的基本盘。',
   '西汉': '开疆拓土的盛世。武帝北击匈奴、取河西四郡、凿空西域，宣帝设西域都护府将天山南北纳入版图，疆域远超秦代。',
   '东汉': '光武中兴重建汉室，西域三绝三通；后期羌乱迭起，西北疆域渐次收缩。',
@@ -534,11 +539,28 @@ for (const snap of SNAPSHOTS) {
   const div = snap.divisions
     ? buildDivisions(snap.divisions, adminTerritories, snap.id)
     : null;
+  // 据点层（都邑/方国/遗址点位）：静态源 → 断面文件，懒加载同政区层
+  let placesFc = null;
+  if (snap.places) {
+    const src = readJson(`${SRC}${snap.places}`);
+    placesFc = {
+      type: 'FeatureCollection',
+      features: src.features.map(f => ({
+        type: 'Feature',
+        properties: { ...f.properties, layer: 'place' },
+        geometry: {
+          type: 'Point',
+          coordinates: [round2(f.geometry.coordinates[0]), round2(f.geometry.coordinates[1])],
+        },
+      })),
+    };
+    writeFileSync(`${ROOT}data/geo/${snap.id}-places.json`, JSON.stringify(placesFc));
+  }
   writeFileSync(`${ROOT}data/geo/${snap.id}.json`, JSON.stringify({ type: 'FeatureCollection', features: territoryFeats }));
   if (div) writeFileSync(`${ROOT}data/geo/${snap.id}-div.json`, JSON.stringify(div));
   const nDiv = div ? div.features.length : 0;
   const size = (JSON.stringify(territoryFeats).length / 1024).toFixed(0);
-  console.log(`geo/${snap.id}.json  ${snap.label}  政权${territoryFeats.length}+政区${nDiv}  轮廓${size}KB`);
+  console.log(`geo/${snap.id}.json  ${snap.label}  政权${territoryFeats.length}+政区${nDiv}+据点${placesFc ? placesFc.features.length : 0}  轮廓${size}KB`);
   timelineSnapshots.push({
     id: snap.id, year: snap.year, era: snap.era, label: snap.label, note: snap.note,
     regimes: snap.territories.map(t => ({
@@ -546,6 +568,7 @@ for (const snap of SNAPSHOTS) {
     })),
     geoFile: `geo/${snap.id}.json`,
     ...(div ? { divisionsFile: `geo/${snap.id}-div.json` } : {}),
+    ...(placesFc ? { placesFile: `geo/${snap.id}-places.json` } : {}),
   });
 }
 
@@ -634,3 +657,21 @@ const provinces = {
 };
 writeFileSync(`${ROOT}data/geo/provinces.json`, JSON.stringify(provinces));
 console.log(`geo/provinces.json  ${provinces.features.length}个省级政区`);
+
+// ── 现代行政地名点位（省/市/县驻地，阿里 DataV 递归提取，几何即弃）──
+// 静态源 tools/sources/modern-places.json 由 fetch-modern-places.mjs 生成，此处不再联网
+const modernPlacesSrc = readJson(`${SRC}modern-places.json`);
+const placesModern = {
+  type: 'FeatureCollection',
+  features: modernPlacesSrc.features.map(f => ({
+    type: 'Feature',
+    properties: { ...f.properties, layer: 'modern-place' },
+    geometry: {
+      type: 'Point',
+      coordinates: [round2(f.geometry.coordinates[0]), round2(f.geometry.coordinates[1])],
+    },
+  })),
+};
+writeFileSync(`${ROOT}data/geo/places-modern.json`, JSON.stringify(placesModern));
+const nByLevel = placesModern.features.reduce((m, f) => ((m[f.properties.level] = (m[f.properties.level] || 0) + 1), m), {});
+console.log(`geo/places-modern.json  ${placesModern.features.length}点`, JSON.stringify(nByLevel));

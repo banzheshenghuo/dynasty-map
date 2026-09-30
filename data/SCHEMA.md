@@ -12,9 +12,11 @@ data/
 ├── timeline.json          时间轴索引（唯一入口：断面 + 事件）
 ├── geo/s{id}.json         断面疆域面（多政权并立时多个 feature）
 ├── geo/s{id}-div.json     断面政区界
+├── geo/s{id}-places.json  断面据点层（都邑/方国/遗址点位）
 ├── geo/modern.json        现代国界（对照底图）
 ├── geo/provinces.json     现代省界
-└── geo/neighbors.json     周边现代国界
+├── geo/neighbors.json     周边现代国界
+└── geo/places-modern.json 现代行政地名点位（省/市/县驻地）
 ```
 
 断面 id 形如 `sbc221` / `s780` / `s1911`：`s` + 可选 `bc`（公元前）+ 公元年份数值。
@@ -47,6 +49,8 @@ data/
 - `geoFile`：相对 `data/` 的疆域文件指针
 - `divisionsFile`：相对 `data/` 的政区文件指针，**可选**——上古断面（夏商西周，
   谭图本就不画政区）省略此字段即无政区层
+- `placesFile`：相对 `data/` 的据点文件指针，**可选**——断面据点层（都城/都邑/
+  方国/遗址点位）；上古断面为主，任何断面可用
 
 ### events[] 每条
 
@@ -77,6 +81,16 @@ FeatureCollection，多个 feature：
 - 覆盖不完整是已知现状（早期朝代受上游数字化进度限制），非契约要求；
   治所 Voronoi 胞元仅为示意性兜底
 
+## geo/s{id}-places.json — 断面据点层
+
+FeatureCollection，**Point** 几何（懒加载，加载失败静默降级，同政区层）：
+
+- `properties.name`：据点名（如 殷 / 亳 / 盘龙城），断面内唯一
+- `properties.kind`：枚举 `都城 | 都邑 | 方国 | 遗址`（渲染符号分级）
+- `properties.today`：今地名（如 河南安阳），tooltip 古今对照用
+- `properties.note`：一句话依据/说明
+- `properties.layer = "place"`；坐标 2 位小数
+
 ## 对照底图三件
 
 | 文件 | name 哨兵值 | layer | 专有属性 | 精度 |
@@ -85,12 +99,27 @@ FeatureCollection，多个 feature：
 | provinces.json | `__provinces__` | `provinces` | `province`（省名） | 2 位 |
 | neighbors.json | `__neighbors__` | `neighbors` | `country`（国名，不含 China） | 2 位 |
 
+## geo/places-modern.json — 现代行政地名点位
+
+FeatureCollection，**Point** 几何（省/市/县三级行政区驻地，随「现代地名」开关
+懒加载，与 timeline 无指针关系）：
+
+- `properties.name`：行政区名
+- `properties.adcode`：行政区划代码（数字）
+- `properties.level`：枚举 `province | city | district`
+- `properties.province` / `properties.city`：父级名（省名尽量齐；直辖市区县
+  city 与省同名；省直辖县级市 city 与省同名）
+- `properties.layer = "modern-place"`；坐标 2 位小数
+- 来源：阿里 DataV GeoAtlas 递归提取驻地点（几何即弃），约 3200 点
+
 ## 图层识别约定
 
 前端把多个 FeatureCollection 合并后按 `properties` 判别图层：
 
 - 哨兵名（`__` 前缀）：`__regime_*` / `__modern__` / `__provinces__` / `__neighbors__`
 - 政区要素无哨兵名，以 `layer = "division"` 判别
+- 点位层不进 registerMap，以 `layer = "place"`（断面据点）/ `"modern-place"`
+  （现代地名）判别，scatter 系列渲染
 
 ## 消费方
 

@@ -5,6 +5,7 @@ import {
   selectEvent,
   setModernVisible,
   setDivisionsVisible,
+  setModernPlacesVisible,
   preload,
   getDivisionFontSize,
   setDivisionFontSize,
@@ -158,6 +159,7 @@ async function boot() {
 
   $('#modern-toggle').addEventListener('change', e => setModernVisible(e.target.checked));
   $('#division-toggle').addEventListener('change', e => setDivisionsVisible(e.target.checked));
+  $('#modern-places-toggle').addEventListener('change', e => setModernPlacesVisible(e.target.checked));
   bindKeyboard(() => step(-1), () => step(1));
 
   // 设置面板：政区字号滑杆实时生效并写入 localStorage，重置清存储回自适应默认

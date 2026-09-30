@@ -33,6 +33,12 @@ let selSize = 13;
 let divisionGeo = null;
 let divisionsVisible = true;
 const divCache = new Map();
+// 断面据点层（都城/都邑/方国/遗址）：懒加载同政区层，失败静默降级
+let placeGeoFeatures = [];
+const placeCache = new Map();
+// 现代地名点位（省/市/县驻地）：随「现代地名」开关懒加载，按缩放分层显示
+let modernPlacesGeo = null;
+let modernPlacesVisible = false;
 let currentSnap = null;
 let currentEvents = [];
 let selectedEvent = null;
@@ -72,6 +78,20 @@ function fetchDivisions(snap) {
     );
   }
   return divCache.get(snap.id);
+}
+
+function fetchPlaces(snap) {
+  if (!snap.placesFile) return Promise.resolve(null);
+  if (!placeCache.has(snap.id)) {
+    placeCache.set(
+      snap.id,
+      fetchJson(snap.placesFile).catch((e) => {
+        console.warn(`据点图层加载失败，本断面不显示据点: ${snap.placesFile}`, e);
+        return null;
+      })
+    );
+  }
+  return placeCache.get(snap.id);
 }
 
 // ── 政区悬浮提示与边框高亮：自实现（zr mousemove + 射线法点在多边形）──
@@ -347,6 +367,13 @@ export async function initMap(el, handlers) {
   // 不会触发 window resize，画布若不跟随会溢出盖住底栏
   const ro = new ResizeObserver(() => chart.resize());
   ro.observe(el);
+  // 缩放/平移时按当前 zoom 重算现代地名分层（节流，避免拖动每帧 setOption）
+  let roamTimer = null;
+  chart.on('georoam', () => {
+    if (!modernPlacesVisible) return;
+    clearTimeout(roamTimer);
+    roamTimer = setTimeout(applyModernPlaces, 120);
+  });
 }
 
 // 事件提示卡：全局与 series 级共用同一份配置。
@@ -369,6 +396,99 @@ const eventTooltip = () => ({
             <div class="tip-desc">${e.description}</div>`;
   },
 });
+
+// ── 据点层（都城/都邑/方国/遗址）：符号分级 + 楷体常显标注 ────
+// 色彩沿用断面主政权色（深=都城，中=都邑/方国，遗址空心描边）
+const placeStyle = (kind, color) => {
+  if (kind === '都城') return { symbol: 'circle', symbolSize: 9, itemStyle: { color, borderColor: PAPER, borderWidth: 1.2 } };
+  if (kind === '都邑') return { symbol: 'circle', symbolSize: 7, itemStyle: { color: rgba(color, 0.90) } };
+  if (kind === '方国') return { symbol: 'diamond', symbolSize: 7, itemStyle: { color: rgba(color, 0.75) } };
+  return { symbol: 'circle', symbolSize: 6, itemStyle: { color: 'rgba(0,0,0,0)', borderColor: rgba(color, 0.85), borderWidth: 1.6 } };
+};
+
+const placeSeriesData = (snap, features) => {
+  const color = primaryColor(snap);
+  return (features || []).map(f => {
+    const p = f.properties;
+    return {
+      name: p.name, value: f.geometry.coordinates,
+      kind: p.kind, today: p.today, note: p.note || '',
+      ...placeStyle(p.kind, color),
+    };
+  });
+};
+
+// 都城光环（外圈空心大圆，衬出王都级）
+const placeRingData = (snap, features) => {
+  const color = primaryColor(snap);
+  return (features || [])
+    .filter(f => f.properties.kind === '都城')
+    .map(f => ({
+      name: f.properties.name, value: f.geometry.coordinates,
+      symbol: 'circle', symbolSize: 17,
+      itemStyle: { color: 'rgba(0,0,0,0)', borderColor: rgba(color, 0.55), borderWidth: 1.4 },
+    }));
+};
+
+const placeTooltip = {
+  backgroundColor: 'rgba(252, 247, 234, 0.97)',
+  borderColor: '#c5b48c',
+  textStyle: { color: '#3b3226' },
+  confine: true,
+  padding: [10, 14],
+  extraCssText: 'max-height:40vh;overflow-y:auto;box-shadow:0 4px 18px rgba(80, 66, 40, 0.25);',
+  formatter: p => p.data?.kind
+    ? `<div class="tip-title">${p.data.name}</div>
+       <div class="tip-loc">${p.data.kind} · 今${p.data.today}</div>
+       ${p.data.note ? `<div class="tip-desc">${p.data.note}</div>` : ''}`
+    : '',
+};
+
+// ── 现代地名点位：按缩放分层（省 → 省市 → 市县），georoam 节流刷新 ──
+// 分层阈值按视野覆盖粗定：<2.2 全国看省名；2.2–4.8 数省看省市；≥4.8 放大看市县
+const modernPlaceLevels = zoom =>
+  zoom < 2.2 ? 'province' : zoom < 4.8 ? 'provinceCity' : 'cityDistrict';
+
+function modernPlaceData() {
+  if (!modernPlacesVisible || !modernPlacesGeo) return [];
+  const zoom = chart.getOption()?.geo?.[0]?.zoom ?? 1;
+  const tier = modernPlaceLevels(zoom);
+  return modernPlacesGeo.features
+    .filter(f => {
+      const lv = f.properties.level;
+      return tier === 'province' ? lv === 'province'
+        : tier === 'provinceCity' ? lv !== 'district'
+        : lv !== 'province';
+    })
+    .map(f => {
+      const p = f.properties;
+      const big = p.level === 'province';
+      const mid = p.level === 'city';
+      return {
+        name: p.name, value: f.geometry.coordinates,
+        symbol: 'circle',
+        symbolSize: big ? 4 : mid ? 3 : 2.2,
+        itemStyle: { color: big ? 'rgba(60,50,35,0.8)' : mid ? 'rgba(60,50,35,0.55)' : 'rgba(60,50,35,0.4)' },
+        label: { fontSize: big ? 11 : mid ? 10 : 9, color: big ? '#514634' : '#6a5f4c' },
+      };
+    });
+}
+
+function applyModernPlaces() {
+  chart?.setOption({ series: [{ id: 'modern-places', data: modernPlaceData() }] });
+}
+
+export async function setModernPlacesVisible(visible) {
+  if (modernPlacesVisible === visible) return;
+  modernPlacesVisible = visible;
+  if (visible && !modernPlacesGeo) {
+    modernPlacesGeo = await fetchJson('geo/places-modern.json').catch((e) => {
+      console.warn('现代地名点位加载失败:', e);
+      return null;
+    });
+  }
+  applyModernPlaces();
+}
 
 function baseOption(snap, mapName) {
   return {
@@ -403,6 +523,26 @@ function baseOption(snap, mapName) {
     },
     series: [
       {
+        // 现代地名点位：墨=今（黑体细字+小墨点），随「现代地名」开关按缩放分层，
+        // 静默不参与悬浮/点击，避免 3000+ 点位淹没事件与据点交互
+        id: 'modern-places',
+        type: 'scatter',
+        coordinateSystem: 'geo',
+        silent: true,
+        z: 1,
+        tooltip: { show: false },
+        labelLayout: { hideOverlap: true },
+        label: {
+          show: true,
+          formatter: p => p.name,
+          fontFamily: "'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif",
+          color: '#6a5f4c',
+          textBorderColor: 'rgba(246, 238, 217, 0.9)',
+          textBorderWidth: 2,
+        },
+        data: [],
+      },
+      {
         // 政区名注记：静默（不拦截悬浮/点击），重叠自动避让，随「政区界」开关显隐
         id: 'div-labels',
         type: 'scatter',
@@ -424,6 +564,39 @@ function baseOption(snap, mapName) {
         },
         emphasis: { disabled: true },
         data: divLabelData,
+      },
+      {
+        // 都城光环：外圈空心大圆，衬王都级
+        id: 'places-ring',
+        type: 'scatter',
+        coordinateSystem: 'geo',
+        silent: true,
+        z: 2,
+        tooltip: { show: false },
+        emphasis: { disabled: true },
+        data: placeRingData(snap, placeGeoFeatures),
+      },
+      {
+        // 断面据点层（都城/都邑/方国/遗址）：楷体常显标注，悬浮出今地名对照
+        id: 'places',
+        type: 'scatter',
+        coordinateSystem: 'geo',
+        z: 2,
+        labelLayout: { hideOverlap: true },
+        label: {
+          show: true,
+          formatter: p => p.name,
+          position: 'right',
+          distance: 5,
+          fontSize: labelFontSize,
+          fontFamily: "'Kaiti SC','STKaiti','KaiTi','FangSong',serif",
+          color: '#3b3226',
+          textBorderColor: 'rgba(246, 238, 217, 0.85)',
+          textBorderWidth: 2,
+        },
+        emphasis: { scale: 1.35 },
+        tooltip: placeTooltip,
+        data: placeSeriesData(snap, placeGeoFeatures),
       },
       {
         id: 'evt',
@@ -454,8 +627,9 @@ const toPoint = e => ({ name: e.title, value: [e.location.lng, e.location.lat], 
 
 export async function showSnapshot(snap, events, view = {}) {
   const geo = await fetchGeo(snap);
-  const divisions = await fetchDivisions(snap);
+  const [divisions, places] = await Promise.all([fetchDivisions(snap), fetchPlaces(snap)]);
   divisionGeo = divisions;
+  placeGeoFeatures = places?.features || [];
   // 射线法检索结构：每政区保留多边形环组
   divisionRings = (divisions?.features || []).map(f => ({
     name: f.properties.name,
@@ -499,6 +673,8 @@ export async function showSnapshot(snap, events, view = {}) {
     if (view.center) opt.geo.center = view.center;
     if (view.zoom) opt.geo.zoom = view.zoom;
     chart.setOption(opt, { notMerge: true });
+    // notMerge 会清掉现代地名层的数据，换图后按当前缩放回填
+    if (modernPlacesVisible) applyModernPlaces();
     container.style.opacity = '1';
   }, 160);
 }
@@ -550,6 +726,7 @@ export function preload(snap) {
   if (!snap) return; // 首断面向前预取越界（snapshots[-1]），无目标即跳过
   fetchGeo(snap).catch(() => {});
   fetchDivisions(snap);
+  fetchPlaces(snap);
 }
 
 // ── 政区注记字号：设置面板调节，localStorage 持久化 ──────────

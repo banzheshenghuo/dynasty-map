@@ -158,6 +158,11 @@ body {
   font-family: var(--kai); font-size: 14px; letter-spacing: 3px;
   color: var(--ink); margin-bottom: 12px;
 }
+.settings-check {
+  display: flex; align-items: center; gap: 9px; margin-bottom: 12px;
+  font-size: 12.5px; color: var(--ink-soft); cursor: pointer; user-select: none;
+}
+.settings-check input { accent-color: var(--cinnabar); cursor: pointer; }
 .settings-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--ink-soft); }
 .settings-row label { white-space: nowrap; }
 .settings-row input[type='range'] { flex: 1; min-width: 0; accent-color: var(--cinnabar); cursor: pointer; }
