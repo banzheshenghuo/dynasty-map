@@ -1,7 +1,17 @@
 # AGENTS.md — Agent 工作约定
 
 华夏疆域历代演变图：Vite + ECharts 纯静态前端，`data/` 为自描述静态数据层。
-动手前先读 [data/SCHEMA.md](data/SCHEMA.md)（数据契约）与 README.md（来源与许可）。
+动手前先读 [data/SCHEMA.md](data/SCHEMA.md)（数据契约）、README.md（架构与基线）
+与 [doc/README.md](doc/README.md)（技术方案流程）。
+
+## 技术方案文档流程（2026-09-30 用户立规）
+
+- 需求开发与问题修复**先方案后编码**：在 `doc/active/` 按 `_template.md` 立项
+  （命名 `YYYY-MM-DD-主题.md`），与用户对齐后再执行；小修小补（文案/样式微调）可豁免
+- 执行中代码若偏离方案（改路径/换实现/砍范围），**当天回写**文档「实施记录 / 方案调整」
+- 完结后：文档移入 `doc/archive/` 补「结论」，**重点事项或方案调整合并回
+  README「项目基线」**（重大演进更新基线日期）
+- 开工前先查 `doc/active/` 有无在途方案，避免与进行中工作冲突
 
 ## 数据层（技术栈中立可迁移 = 第一原则）
 
