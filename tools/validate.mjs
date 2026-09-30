@@ -48,7 +48,7 @@ for (const e of events || []) if (!eraNames.has(e.era)) fail(`事件「${e.title
 let prevYear = -Infinity;
 const allRegimeSpellings = new Map(); // 全局唯一拼写检查
 for (const s of snapshots) {
-  for (const key of ['id', 'year', 'era', 'label', 'note', 'geoFile', 'divisionsFile']) {
+  for (const key of ['id', 'year', 'era', 'label', 'note', 'geoFile']) {
     if (s[key] == null) fail(`断面缺少字段 ${key}: ${JSON.stringify(s.id ?? s)}`);
   }
   if (s.year <= prevYear) fail(`${s.id} 断面年份未严格升序（${s.year} ≤ ${prevYear}）`);
@@ -87,6 +87,8 @@ for (const s of snapshots) {
     else ok(`${s.id} ${s.label}  政权${geo.features.length} 坐标${n}点合法`);
   }
 
+  // divisionsFile 可选（夏商西周上古断面无政区层）
+  if (s.divisionsFile == null) continue;
   const divPath = join(ROOT, 'data', s.divisionsFile);
   if (!existsSync(divPath)) { fail(`${s.id} 政区文件不存在: ${s.divisionsFile}`); continue; }
   const div = JSON.parse(readFileSync(divPath, 'utf8'));

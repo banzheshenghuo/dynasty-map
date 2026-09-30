@@ -77,6 +77,7 @@ mkdirSync(`${ROOT}data/events`, { recursive: true });
 
 // ── 政权配色：谭图式一政权一色，跨断面稳定（呈现参数，随 timeline.json 下发）──
 const REGIME_COLORS = {
+  '商': '#8A6B3F',
   '秦': '#6D5B8B', '汉': '#A6402F', '匈奴': '#8C8270', '南越': '#7A8A6A', '闽越': '#9A8A5A',
   '魏': '#46708F', '蜀汉': '#5F7D50', '吴': '#B07D2B',
   '西晋': '#96688F', '东晋': '#6B7FA3', '十六国': '#8C7A5E', '前秦': '#86748E',
@@ -94,6 +95,9 @@ const REGIME_COLORS = {
 const HB = f => ({ kind: 'world', file: f });
 const HAND = f => ({ kind: 'hand', file: f });
 const SNAPSHOTS = [
+  { id: 'sbc1200', year: -1200, era: '商', label: '商 · 殷墟时期',
+    territories: [{ name: '商', ...HAND('hand-shang.json') }],
+    note: '约前1200年（谭图第一册网格配准读图·商据点群推定示意，无政区层）' },
   { id: 'sbc221', year: -221, era: '秦', label: '秦 · 统一六国',
     territories: [{ name: '秦', ...HAND('hand-qin.json') }],
     divisions: { src: 'qin' }, note: '约前221年（手绘轮廓+CHGIS V6 政区·谭图补点）' },
@@ -462,6 +466,7 @@ function buildDivisions(cfg, adminTerritories, snapId) {
 
 // ── 时代分段：时间轴底色 + 侧栏时代简介（era 聚合，颜色取首个断面主政权）──
 const ERA_SUMMARY = {
+  '商': '甲骨文与青铜器见证的王朝。盘庚迁殷后王都稳定于安阳一带，商以据点式方式控制四土：西抵岐周、北至冀中、南达江汉盘龙城；本图色块为据点群推定示意。',
   '秦': '结束战国五百年分裂的首个大一统王朝。北逐匈奴取河套、修长城，南平百越设桂林与象郡，书同文、车同轨、行郡县，奠定此后两千年华夏政治的基本盘。',
   '西汉': '开疆拓土的盛世。武帝北击匈奴、取河西四郡、凿空西域，宣帝设西域都护府将天山南北纳入版图，疆域远超秦代。',
   '东汉': '光武中兴重建汉室，西域三绝三通；后期羌乱迭起，西北疆域渐次收缩。',
@@ -525,10 +530,13 @@ for (const snap of SNAPSHOTS) {
     if (!t.weak) adminTerritories.push({ name: t.name, geometry });
   }
   if (!territoryFeats.length) throw new Error(`${snap.id}: 疆域轮廓为空`);
-  const div = buildDivisions(snap.divisions, adminTerritories, snap.id);
+  // 上古断面（夏商西周）无政区层：divisions 缺省即不产出政区文件
+  const div = snap.divisions
+    ? buildDivisions(snap.divisions, adminTerritories, snap.id)
+    : null;
   writeFileSync(`${ROOT}data/geo/${snap.id}.json`, JSON.stringify({ type: 'FeatureCollection', features: territoryFeats }));
-  writeFileSync(`${ROOT}data/geo/${snap.id}-div.json`, JSON.stringify(div));
-  const nDiv = div.features.length;
+  if (div) writeFileSync(`${ROOT}data/geo/${snap.id}-div.json`, JSON.stringify(div));
+  const nDiv = div ? div.features.length : 0;
   const size = (JSON.stringify(territoryFeats).length / 1024).toFixed(0);
   console.log(`geo/${snap.id}.json  ${snap.label}  政权${territoryFeats.length}+政区${nDiv}  轮廓${size}KB`);
   timelineSnapshots.push({
@@ -536,7 +544,8 @@ for (const snap of SNAPSHOTS) {
     regimes: snap.territories.map(t => ({
       name: t.name, color: REGIME_COLORS[t.name] || '#8C8270', weak: !!t.weak,
     })),
-    geoFile: `geo/${snap.id}.json`, divisionsFile: `geo/${snap.id}-div.json`,
+    geoFile: `geo/${snap.id}.json`,
+    ...(div ? { divisionsFile: `geo/${snap.id}-div.json` } : {}),
   });
 }
 
