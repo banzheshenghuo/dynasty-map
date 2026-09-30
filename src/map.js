@@ -547,6 +547,7 @@ export function setModernVisible(visible) {
 }
 
 export function preload(snap) {
+  if (!snap) return; // 首断面向前预取越界（snapshots[-1]），无目标即跳过
   fetchGeo(snap).catch(() => {});
   fetchDivisions(snap);
 }
