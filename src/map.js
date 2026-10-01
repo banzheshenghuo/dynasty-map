@@ -159,7 +159,7 @@ function sentinelRegions(snap) {
     ...snap.regimes.map(r => ({
       name: `__regime_${r.name}`,
       itemStyle: {
-        areaColor: rgba(r.color, r.weak ? 0.20 : 0.40),
+        areaColor: rgba(r.color, r.weak ? 0.20 : 0.35),
         borderColor: r.weak ? rgba(r.color, 0.60) : r.color,
         borderWidth: r.weak ? 1 : 1.4,
         borderType: 'solid',
@@ -403,16 +403,20 @@ const placeStyle = (kind, color) => {
   if (kind === '都城') return { symbol: 'circle', symbolSize: 9, itemStyle: { color, borderColor: PAPER, borderWidth: 1.2 } };
   if (kind === '都邑') return { symbol: 'circle', symbolSize: 7, itemStyle: { color: rgba(color, 0.90) } };
   if (kind === '方国') return { symbol: 'diamond', symbolSize: 7, itemStyle: { color: rgba(color, 0.75) } };
+  if (kind === '部族') return { symbol: 'diamond', symbolSize: 5.5, itemStyle: { color: 'rgba(0,0,0,0)', borderColor: rgba(color, 0.55), borderWidth: 1.4 } };
   return { symbol: 'circle', symbolSize: 6, itemStyle: { color: 'rgba(0,0,0,0)', borderColor: rgba(color, 0.85), borderWidth: 1.6 } };
 };
 
+// 标签方位四向轮转，错开密集区的名字（都城恒取上方示尊）
+const LABEL_POS = ['right', 'bottom', 'left', 'top'];
 const placeSeriesData = (snap, features) => {
   const color = primaryColor(snap);
-  return (features || []).map(f => {
+  return (features || []).map((f, i) => {
     const p = f.properties;
     return {
       name: p.name, value: f.geometry.coordinates,
       kind: p.kind, today: p.today, note: p.note || '',
+      label: { position: p.kind === '都城' ? 'top' : LABEL_POS[i % LABEL_POS.length] },
       ...placeStyle(p.kind, color),
     };
   });
@@ -444,21 +448,35 @@ const placeTooltip = {
     : '',
 };
 
-// ── 现代地名点位：按缩放分层（省 → 省市 → 市县），georoam 节流刷新 ──
-// 分层阈值按视野覆盖粗定：<2.2 全国看省名；2.2–4.8 数省看省市；≥4.8 放大看市县
+// 王朝名称大字：政权疆域形心定位，政权色楷体（weak 政权小一号）
+let regimeLabelData = [];
+function buildRegimeLabels(snap, geo) {
+  const byName = new Map(snap.regimes.map(r => [r.name, r]));
+  regimeLabelData = (geo?.features || [])
+    .map(f => {
+      const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      const pt = labelPoint(polys);
+      return pt ? { name: f.properties.regime, value: pt, weak: byName.get(f.properties.regime)?.weak } : null;
+    })
+    .filter(Boolean);
+}
+
+// ── 现代地名点位：按缩放分层 + 各级开关（georoam 节流刷新）──
+// 分层阈值按视野覆盖粗定：<2.2 全国看省名；2.2–4.8 数省看省市；≥4.8 放大看市县。
+// 分层决定「该缩放下允许出现的级别」，modernLevels 决定「用户勾选显示的级别」，取交集
 const modernPlaceLevels = zoom =>
-  zoom < 2.2 ? 'province' : zoom < 4.8 ? 'provinceCity' : 'cityDistrict';
+  zoom < 2.2 ? { province: true } : zoom < 4.8 ? { province: true, city: true } : { city: true, district: true };
+
+let modernLevelConfig = { province: true, city: true, district: true };
 
 function modernPlaceData() {
   if (!modernPlacesVisible || !modernPlacesGeo) return [];
   const zoom = chart.getOption()?.geo?.[0]?.zoom ?? 1;
-  const tier = modernPlaceLevels(zoom);
+  const allow = modernPlaceLevels(zoom);
   return modernPlacesGeo.features
     .filter(f => {
       const lv = f.properties.level;
-      return tier === 'province' ? lv === 'province'
-        : tier === 'provinceCity' ? lv !== 'district'
-        : lv !== 'province';
+      return allow[lv] && modernLevelConfig[lv];
     })
     .map(f => {
       const p = f.properties;
@@ -487,6 +505,12 @@ export async function setModernPlacesVisible(visible) {
       return null;
     });
   }
+  applyModernPlaces();
+}
+
+// 现代地名各级别开关（省/市/县 checkbox）
+export function setModernPlaceLevels(levels) {
+  modernLevelConfig = { ...modernLevelConfig, ...levels };
   applyModernPlaces();
 }
 
@@ -522,6 +546,35 @@ function baseOption(snap, mapName) {
       ...eventTooltip(),
     },
     series: [
+      {
+        // 王朝名称大字：政权形心定位，政权色楷体（史图式朝代注记），
+        // 压在疆域色块之上、其他注记之下
+        id: 'regime-labels',
+        type: 'scatter',
+        coordinateSystem: 'geo',
+        symbolSize: 0,
+        itemStyle: { color: 'transparent' },
+        silent: true,
+        z: 1,
+        tooltip: { show: false },
+        label: {
+          show: true,
+          formatter: p => p.name,
+          fontSize: 26,
+          fontWeight: 600,
+          fontFamily: "'Kaiti SC','STKaiti','KaiTi','FangSong',serif",
+          color: '#3b3226',
+          textBorderColor: 'rgba(246, 238, 217, 0.75)',
+          textBorderWidth: 3,
+        },
+        emphasis: { disabled: true },
+        data: regimeLabelData.map(d => ({
+          ...d,
+          label: d.weak
+            ? { fontSize: 15, fontWeight: 400, color: '#6a5f4c', textBorderWidth: 2 }
+            : { color: rgba(snap.regimes.find(r => r.name === d.name)?.color || '#3b3226', 0.95) },
+        })),
+      },
       {
         // 现代地名点位：墨=今（黑体细字+小墨点），随「现代地名」开关按缩放分层，
         // 静默不参与悬浮/点击，避免 3000+ 点位淹没事件与据点交互
@@ -650,6 +703,7 @@ export async function showSnapshot(snap, events, view = {}) {
   currentEvents = events;
   selectedEvent = null;
   resetDivisionHighlights();
+  buildRegimeLabels(snap, geo);
 
   const mapName = `map_${snap.id}_${Date.now() % 1e6}`;
   // 图层自底向上：邻国 → 各政权疆域 → 现代省界 → 断面政区界 → 现代轮廓
@@ -669,9 +723,11 @@ export async function showSnapshot(snap, events, view = {}) {
   container.style.opacity = '0.35';
   setTimeout(() => {
     const opt = baseOption(snap, mapName);
-    // 开关政区层时保持当前视野（中心/缩放）
-    if (view.center) opt.geo.center = view.center;
-    if (view.zoom) opt.geo.zoom = view.zoom;
+    // 保持视野：显式 view 优先；未指定时继承当前缩放/中心（切换断面不再跳回全国），
+    // 首次渲染 chart 无 geo 选项则用 baseOption 默认取景
+    const prev = chart.getOption()?.geo?.[0];
+    opt.geo.center = view.center || prev?.center || opt.geo.center;
+    opt.geo.zoom = view.zoom || prev?.zoom || opt.geo.zoom;
     chart.setOption(opt, { notMerge: true });
     // notMerge 会清掉现代地名层的数据，换图后按当前缩放回填
     if (modernPlacesVisible) applyModernPlaces();

@@ -93,7 +93,7 @@ for (const s of snapshots) {
     if (!existsSync(placesPath)) fail(`${s.id} 据点文件不存在: ${s.placesFile}`);
     else {
       const places = JSON.parse(readFileSync(placesPath, 'utf8'));
-      const KINDS = new Set(['都城', '都邑', '方国', '遗址']);
+      const KINDS = new Set(['都城', '都邑', '方国', '部族', '遗址']);
       let bad = 0;
       const seen = new Set();
       for (const f of places.features || []) {

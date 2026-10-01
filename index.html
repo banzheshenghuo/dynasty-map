@@ -28,8 +28,19 @@
             <div class="settings-title">显 示 设 置</div>
             <label class="settings-check" title="叠加现代省 / 市 / 县驻地地名，随缩放分层显示">
               <input type="checkbox" id="modern-places-toggle" />
-              <span>现代地名（省 / 市 / 县）</span>
+              <span>现代地名</span>
             </label>
+            <div class="settings-sub" id="modern-places-levels" hidden>
+              <label class="settings-sub-check" title="省级地名">
+                <input type="checkbox" id="mp-prov" checked /><span>省</span>
+              </label>
+              <label class="settings-sub-check" title="地级市地名">
+                <input type="checkbox" id="mp-city" checked /><span>市</span>
+              </label>
+              <label class="settings-sub-check" title="区县地名（放大后显示）">
+                <input type="checkbox" id="mp-dist" checked /><span>县</span>
+              </label>
+            </div>
             <div class="settings-row">
               <label for="div-font-range">政区字号</label>
               <input type="range" id="div-font-range" min="9" max="20" step="1" />

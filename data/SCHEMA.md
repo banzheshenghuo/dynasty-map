@@ -86,7 +86,8 @@ FeatureCollection，多个 feature：
 FeatureCollection，**Point** 几何（懒加载，加载失败静默降级，同政区层）：
 
 - `properties.name`：据点名（如 殷 / 亳 / 盘龙城），断面内唯一
-- `properties.kind`：枚举 `都城 | 都邑 | 方国 | 遗址`（渲染符号分级）
+- `properties.kind`：枚举 `都城 | 都邑 | 方国 | 部族 | 遗址`（渲染符号分级；
+  部族=疆域之外的邻邦部族，更淡更小）
 - `properties.today`：今地名（如 河南安阳），tooltip 古今对照用
 - `properties.note`：一句话依据/说明
 - `properties.layer = "place"`；坐标 2 位小数

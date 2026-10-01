@@ -6,6 +6,7 @@ import {
   setModernVisible,
   setDivisionsVisible,
   setModernPlacesVisible,
+  setModernPlaceLevels,
   preload,
   getDivisionFontSize,
   setDivisionFontSize,
@@ -159,7 +160,18 @@ async function boot() {
 
   $('#modern-toggle').addEventListener('change', e => setModernVisible(e.target.checked));
   $('#division-toggle').addEventListener('change', e => setDivisionsVisible(e.target.checked));
-  $('#modern-places-toggle').addEventListener('change', e => setModernPlacesVisible(e.target.checked));
+  // 现代地名：主开关 + 省/市/县三级独立开关（子选项随主开关展开）
+  const mpToggle = $('#modern-places-toggle');
+  const mpLevels = $('#modern-places-levels');
+  mpToggle.addEventListener('change', e => {
+    setModernPlacesVisible(e.target.checked);
+    mpLevels.hidden = !e.target.checked;
+  });
+  const bindLevel = (id, key) =>
+    $(`#${id}`).addEventListener('change', e => setModernPlaceLevels({ [key]: e.target.checked }));
+  bindLevel('mp-prov', 'province');
+  bindLevel('mp-city', 'city');
+  bindLevel('mp-dist', 'district');
   bindKeyboard(() => step(-1), () => step(1));
 
   // 设置面板：政区字号滑杆实时生效并写入 localStorage，重置清存储回自适应默认
