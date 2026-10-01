@@ -1,4 +1,5 @@
-import * as echarts from 'echarts';
+import { Map as MapLibreMap, Marker } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 // 稳定取景框：所有朝代共用同一经纬范围，避免切换时视口跳动
 const BOUNDS = [[70, 15], [138, 57]];
@@ -21,7 +22,12 @@ const DIVISION_SELECT_BORDER = '#7e2f22';
 const EVENT_DOT = '#9e3d2c';
 const PAPER = '#f6eed9';
 
-let chart = null;
+// 楷体注记字体栈：MapLibre v6 fontFaces（自托管 LXGW woff2 分片，见 tools/gen-fonts.mjs）
+// 为唯一 text-font；CJK 加载失败逐级回落：下一分片 → glyphs（未设）→ localIdeographFontFamily
+const KAITI_STACK = 'LXGW WenKai';
+const LOCAL_KAITI = "'Kaiti SC','STKaiti','KaiTi','FangSong',serif";
+
+let map = null;
 let container = null;
 let modernGeo = null;
 let neighborGeo = null;
@@ -29,7 +35,7 @@ let provinceGeo = null;
 let dotSize = 9;
 let selSize = 13;
 // 断面政区界（郡/州/路/府）：按断面懒加载；要素名即政区名（唯一），
-// 走 geo 默认样式渲染，悬浮由 geo 级 tooltip 显示政区名
+// feature-state 高亮以 promoteId('name') 为要素 id
 let divisionGeo = null;
 let divisionsVisible = true;
 const divCache = new Map();
@@ -52,6 +58,8 @@ const rgba = (hex, a) => {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 };
+
+const EMPTY = { type: 'FeatureCollection', features: [] };
 
 async function fetchJson(path) {
   const res = await fetch(BASE + path);
@@ -94,136 +102,7 @@ function fetchPlaces(snap) {
   return placeCache.get(snap.id);
 }
 
-// ── 政区悬浮提示与边框高亮：自实现（zr mousemove + 射线法点在多边形）──
-// 高亮以 region itemStyle 补丁写入/还原，不依赖 geo 的 hover/select 状态机
-let divTipEl = null;
-let divisionRings = [];
-
-const DIVISION_HOVER_STYLE = {
-  areaColor: 'rgba(158, 61, 44, 0.10)',
-  borderColor: DIVISION_HOVER_BORDER,
-  borderWidth: 2.2,
-  borderType: 'solid',
-};
-const DIVISION_SELECT_STYLE = {
-  areaColor: 'rgba(158, 61, 44, 0.14)',
-  borderColor: DIVISION_SELECT_BORDER,
-  borderWidth: 2.6,
-  borderType: 'solid',
-};
-
-// geo.regions 的 setOption 合并按索引而非 name：补丁必须携带完整数组
-// （4 哨兵 + 当前悬浮 + 当前选中），数组变短时尾部项被截断即完成还原
-let hoverDivName = null;
-let selectedDivName = null;
-
-// 断面主政权色（选中涟漪、事件卡、侧栏标题等强调用）
-export const primaryColor = snap =>
-  snap.regimes.find(r => !r.weak)?.color || snap.regimes[0]?.color || '#9e3d2c';
-
-function sentinelRegions(snap) {
-  return [
-    {
-      // 邻国画在最底层：淡墨边界 + 极淡底色，随「现代界线」开关显隐
-      // 注意：region 不声明 borderType 会继承默认 itemStyle 的虚线，须显式 solid
-      name: '__neighbors__',
-      itemStyle: {
-        areaColor: modernVisible ? NEIGHBOR_FILL_ON : 'transparent',
-        borderColor: modernVisible ? NEIGHBOR_BORDER_ON : 'rgba(0,0,0,0)',
-        borderWidth: 0.6,
-        borderType: 'solid',
-      },
-      emphasis: { disabled: true },
-    },
-    {
-      name: '__provinces__',
-      itemStyle: {
-        areaColor: modernVisible ? PROVINCE_FILL_ON : 'transparent',
-        borderColor: modernVisible ? PROVINCE_BORDER_ON : 'rgba(0,0,0,0)',
-        borderWidth: 0.8,
-        borderType: 'solid',
-      },
-      emphasis: { disabled: true },
-    },
-    {
-      name: '__modern__',
-      itemStyle: {
-        areaColor: 'transparent',
-        borderColor: modernVisible ? MODERN_BORDER_ON : 'rgba(0,0,0,0)',
-        borderWidth: 1,
-        borderType: 'solid',
-      },
-      emphasis: { disabled: true },
-    },
-    // 多政权并立：一政权一 feature 一配色；weak（游牧/藩属）更淡退后
-    ...snap.regimes.map(r => ({
-      name: `__regime_${r.name}`,
-      itemStyle: {
-        areaColor: rgba(r.color, r.weak ? 0.20 : 0.35),
-        borderColor: r.weak ? rgba(r.color, 0.60) : r.color,
-        borderWidth: r.weak ? 1 : 1.4,
-        borderType: 'solid',
-      },
-      emphasis: { disabled: true },
-    })),
-  ];
-}
-
-function paintGeoRegions() {
-  if (!chart || !currentSnap) return;
-  const extra = [];
-  if (hoverDivName && hoverDivName !== selectedDivName) {
-    extra.push({ name: hoverDivName, itemStyle: { ...DIVISION_HOVER_STYLE } });
-  }
-  if (selectedDivName) extra.push({ name: selectedDivName, itemStyle: { ...DIVISION_SELECT_STYLE } });
-  // 两段式写补丁：临时关闭过渡动画避免描边拖影，随后立即恢复全局时长
-  chart.setOption({
-    animationDurationUpdate: 0,
-    geo: { regions: [...sentinelRegions(currentSnap), ...extra] },
-  });
-  chart.setOption({ animationDurationUpdate: 550 });
-}
-
-function setHoverDivision(name) {
-  if (hoverDivName === name) return;
-  hoverDivName = name;
-  paintGeoRegions();
-}
-
-function toggleSelectedDivision(name) {
-  selectedDivName = selectedDivName === name ? null : name;
-  paintGeoRegions();
-}
-
-function resetDivisionHighlights() {
-  hoverDivName = null;
-  selectedDivName = null;
-}
-
-const pointInRing = (x, y, ring) => {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
-};
-
-function findDivision(lon, lat) {
-  for (const d of divisionRings) {
-    for (const poly of d.polys) {
-      if (!pointInRing(lon, lat, poly[0])) continue;
-      let inHole = false;
-      for (let h = 1; h < poly.length; h++) {
-        if (pointInRing(lon, lat, poly[h])) { inHole = true; break; }
-      }
-      if (!inHole) return d;
-    }
-  }
-  return null;
-}
-
-// ── 政区名注记：形心定位 + labelLayout.hideOverlap 避让 ──────
+// ── 政区名注记：形心定位 + symbol 碰撞避让 ──────────────────
 const ringArea = ring => {
   let a = 0;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++)
@@ -257,20 +136,42 @@ function labelPoint(polys) {
     for (let gy = 1; gy <= 5; gy++)
       cands.push([x0 + (x1 - x0) * gx / 6, y0 + (y1 - y0) * gy / 6]);
   for (const [x, y] of cands) {
-    if (x == null || !pointInRing(x, y, outer)) continue;
+    if (x == null) continue;
+    let inside = false;
+    for (let i = 0, j = outer.length - 1; i < outer.length; j = i++) {
+      const xi = outer[i][0], yi = outer[i][1], xj = outer[j][0], yj = outer[j][1];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    if (!inside) continue;
     let inHole = false;
-    for (let h = 1; h < best.length; h++) if (pointInRing(x, y, best[h])) { inHole = true; break; }
+    for (let h = 1; h < best.length; h++) {
+      const ring = best[h];
+      let hin = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hin = !hin;
+      }
+      if (hin) { inHole = true; break; }
+    }
     if (!inHole) return [x, y];
   }
   return null;
 }
 
-// 注记数据：按政区面积降序，hideOverlap 时大政区优先占位
+// 注记数据：按政区面积降序生成点要素（symbol-sort-key 越小碰撞优先级越高）
 let divLabelData = [];
 let labelFontSize = 12;
-// 设置面板持久化键；未存储时窄屏 11 / 桌面 12 自适应
 const DIV_FONT_KEY = 'dm.divFontSize';
 const clampFontSize = px => Math.min(20, Math.max(9, Math.round(px)));
+
+// 断面主政权色（选中涟漪、事件卡、侧栏标题等强调用）
+export const primaryColor = snap =>
+  snap.regimes.find(r => !r.weak)?.color || snap.regimes[0]?.color || '#9e3d2c';
+
+// ── 政区悬浮提示与高亮：feature-state（promoteId 要素名）──
+let divTipEl = null;
+let hoverDivName = null;
+let selectedDivName = null;
 
 function hideDivTip() {
   if (divTipEl) divTipEl.hidden = true;
@@ -286,46 +187,409 @@ function showDivTip(px, py, div) {
   divTipEl.style.top = Math.max(py - 52, 8) + 'px';
 }
 
-// 触屏设备（主指针为粗指针）不做悬浮跟随：zrender 会把手指拖动（touchmove）
-// 派发成 zr mousemove，跟随高亮会让拖动时每帧全量 regions setOption——既卡顿
-// 又高亮乱闪。触屏上政区高亮一律由 tap 点选驱动
+function showEventTip(px, py, e) {
+  if (!divTipEl) return;
+  divTipEl.hidden = false;
+  divTipEl.innerHTML = `<div class="tip-year">${e.yearLabel}</div>
+    <div class="tip-title">${e.title}</div>
+    ${e.location.name ? `<div class="tip-loc">${e.location.name}</div>` : ''}
+    <div class="tip-desc">${e.description}</div>`;
+  const w = container.clientWidth;
+  divTipEl.style.left = Math.min(px + 14, w - 200) + 'px';
+  divTipEl.style.top = Math.max(py - 60, 8) + 'px';
+}
+
+function setDivisionState(name, state) {
+  if (!map || !name) return;
+  try {
+    map.setFeatureState({ source: 'divisions', id: name }, state);
+  } catch { /* 要素未加载完成时静默 */ }
+}
+
+function setHoverDivision(name) {
+  if (hoverDivName === name) return;
+  if (hoverDivName) setDivisionState(hoverDivName, { hover: false });
+  hoverDivName = name;
+  if (name) setDivisionState(name, { hover: true });
+}
+
+function clearSelectedDivision() {
+  if (!selectedDivName) return;
+  setDivisionState(selectedDivName, { selected: false });
+  selectedDivName = null;
+}
+
+function toggleSelectedDivision(name) {
+  clearSelectedDivision();
+  if (name) {
+    selectedDivName = name;
+    setDivisionState(name, { selected: true });
+  }
+}
+
+function resetDivisionHighlights() {
+  setHoverDivision(null);
+  clearSelectedDivision();
+}
+
+// 触屏设备不做悬浮跟随（手指拖动会连发 pointermove），政区高亮一律 tap 点选驱动
 const isTouchLike = window.matchMedia('(pointer: coarse)').matches;
 
-function bindDivisionHover() {
-  const zr = chart.getZr();
-  const divisionAt = e => {
-    if (!divisionsVisible || !divisionRings.length || !currentSnap) return null;
-    const pt = chart.convertFromPixel({ geoIndex: 0 }, [e.offsetX, e.offsetY]);
-    return pt ? findDivision(pt[0], pt[1]) : null;
+// 事件提示卡与据点提示卡共用 #div-tip 容器，位置随鼠标
+const eventTipHtml = e => `<div class="tip-year">${e.yearLabel}</div>
+  <div class="tip-title">${e.title}</div>
+  ${e.location.name ? `<div class="tip-loc">${e.location.name}</div>` : ''}
+  <div class="tip-desc">${e.description}</div>`;
+
+const placeTipHtml = d => `<div class="tip-title">${d.name}</div>
+  <div class="tip-loc">${d.kind} · 今${d.today}</div>
+  ${d.note ? `<div class="tip-desc">${d.note}</div>` : ''}`;
+
+function bindHoverTips() {
+  const show = (e, html) => {
+    divTipEl.hidden = false;
+    divTipEl.innerHTML = html;
+    divTipEl.style.maxHeight = '40vh';
+    divTipEl.style.overflowY = 'auto';
+    const w = container.clientWidth;
+    divTipEl.style.left = Math.min(e.point.x + 14, w - 200) + 'px';
+    divTipEl.style.top = Math.max(e.point.y - 60, 8) + 'px';
   };
-  if (isTouchLike) {
-    // 触屏：mousemove 仅用于收起拖动中残留的提示卡，不做检索与高亮
-    zr.on('mousemove', hideDivTip);
-  } else {
-    zr.on('mousemove', e => {
-      const div = divisionAt(e);
-      setHoverDivision(div?.name ?? null);
-      div ? showDivTip(e.offsetX, e.offsetY, div) : hideDivTip();
+  const bindSeries = (layerId, getData) => {
+    map.on('mouseenter', layerId, e => {
+      const d = getData(e);
+      if (!d) return;
+      map.getCanvas().style.cursor = 'pointer';
+      show(e, layerId === 'events' ? eventTipHtml(d) : placeTipHtml(d));
     });
-  }
-  zr.on('globalout', () => {
-    setHoverDivision(null);
-    hideDivTip();
+    map.on('mousemove', layerId, e => {
+      if (divTipEl.hidden) return;
+      const w = container.clientWidth;
+      divTipEl.style.left = Math.min(e.point.x + 14, w - 200) + 'px';
+      divTipEl.style.top = Math.max(e.point.y - 60, 8) + 'px';
+    });
+    map.on('mouseleave', layerId, () => {
+      map.getCanvas().style.cursor = '';
+      hideDivTip();
+    });
+  };
+  // 事件点：GeoJSON 瓦片化会序列化 properties，事件对象以 JSON 字符串挂载
+  bindSeries('events', e => {
+    const raw = e.features?.[0]?.properties?.__event;
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
   });
+  // 据点层（属性全为扁平字符串，无序列化问题）
+  bindSeries('places', e => e.features?.[0]?.properties || null);
+}
+
+function bindDivisionHover() {
+  if (!isTouchLike) {
+    map.on('mousemove', 'divisions-fill', e => {
+      const f = e.features?.[0];
+      setHoverDivision(f?.properties?.name ?? null);
+      if (f) {
+        map.getCanvas().style.cursor = 'pointer';
+        showDivTip(e.point.x, e.point.y, f.properties);
+      } else {
+        map.getCanvas().style.cursor = '';
+        hideDivTip();
+      }
+    });
+    map.on('mouseleave', 'divisions-fill', () => {
+      setHoverDivision(null);
+      hideDivTip();
+    });
+  } else {
+    // 触屏：拖动时仅收起残留提示卡
+    map.on('mousemove', hideDivTip);
+  }
   // 桌面悬浮+点选、触屏点选共用：点击政区切换常驻高亮并弹提示卡，
   // 点击空白取消选中；再点已选中的政区视为取消，顺带收起提示卡
-  zr.on('click', e => {
-    const div = divisionAt(e);
-    if (!div) {
-      setHoverDivision(null);
-      if (selectedDivName) toggleSelectedDivision(selectedDivName);
-      hideDivTip();
-      return;
-    }
-    const deselect = selectedDivName === div.name;
-    toggleSelectedDivision(div.name);
-    deselect ? hideDivTip() : showDivTip(e.offsetX, e.offsetY, div);
+  map.on('click', 'divisions-fill', e => {
+    const f = e.features?.[0];
+    if (!f) return;
+    const name = f.properties.name;
+    const deselect = selectedDivName === name;
+    toggleSelectedDivision(deselect ? null : name);
+    deselect ? hideDivTip() : showDivTip(e.point.x, e.point.y, f.properties);
   });
+  map.on('click', e => {
+    const hits = map.queryRenderedFeatures(e.point, {
+      layers: ['divisions-fill', 'events', 'places'].filter(id => map.getLayer(id)),
+    });
+    if (!hits.length) {
+      setHoverDivision(null);
+      clearSelectedDivision();
+      hideDivTip();
+    }
+  });
+}
+
+// ── 据点层 icon：canvas 离屏预绘（符号分级），addImage 注册 ──
+// icon 依赖断面主政权色，随断面重绘注册（同名覆盖需先 removeImage）
+function makeIcon(draw, size) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size * 2; // 高分屏 2x
+  const ctx = c.getContext('2d');
+  ctx.scale(2, 2);
+  draw(ctx, size);
+  return ctx.getImageData(0, 0, c.width, c.height);
+}
+
+function diamondPath(ctx, cx, cy, r) {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx + r, cy);
+  ctx.lineTo(cx, cy + r);
+  ctx.lineTo(cx - r, cy);
+  ctx.closePath();
+}
+
+function applyPlaceIcons(color) {
+  const defs = {
+    capital: { r: 4.5, fill: color, stroke: PAPER, sw: 1.2, shape: 'circle' },
+    city: { r: 3.5, fill: rgba(color, 0.90), sw: 0, shape: 'circle' },
+    state: { r: 3.5, fill: rgba(color, 0.75), sw: 0, shape: 'diamond' },
+    tribe: { r: 2.75, fill: 'rgba(0,0,0,0)', stroke: rgba(color, 0.55), sw: 1.4, shape: 'diamond' },
+    site: { r: 3, fill: 'rgba(0,0,0,0)', stroke: rgba(color, 0.85), sw: 1.6, shape: 'circle' },
+    ring: { r: 8.5, fill: 'rgba(0,0,0,0)', stroke: rgba(color, 0.55), sw: 1.4, shape: 'circle' },
+  };
+  for (const [key, d] of Object.entries(defs)) {
+    const s = d.r + d.sw + 3;
+    const img = makeIcon(ctx => {
+      if (d.shape === 'diamond') diamondPath(ctx, s, s, d.r);
+      else ctx.arc(s, s, d.r, 0, Math.PI * 2);
+      if (d.fill !== 'rgba(0,0,0,0)') { ctx.fillStyle = d.fill; ctx.fill(); }
+      if (d.sw) { ctx.strokeStyle = d.stroke; ctx.lineWidth = d.sw; ctx.stroke(); }
+    }, s * 2);
+    const name = `place-${key}`;
+    if (map.hasImage(name)) map.removeImage(name);
+    map.addImage(name, img);
+  }
+}
+
+// 现代地名小墨点：省/市/县三级
+function applyModernPlaceIcons() {
+  const defs = { mp: [2, 'rgba(60,50,35,0.8)'], mc: [1.5, 'rgba(60,50,35,0.55)'], md: [1.1, 'rgba(60,50,35,0.4)'] };
+  for (const [key, [r, color]] of Object.entries(defs)) {
+    const s = r + 1;
+    const img = makeIcon(ctx => {
+      ctx.arc(s, s, r, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }, s * 2);
+    const name = `modern-${key}`;
+    if (map.hasImage(name)) map.removeImage(name);
+    map.addImage(name, img);
+  }
+}
+
+// ── 王朝名称大字：政权疆域形心定位，政权色楷体（weak 政权小一号）──
+let regimeLabelData = [];
+function buildRegimeLabels(snap, geo) {
+  const byName = new Map(snap.regimes.map(r => [r.name, r]));
+  regimeLabelData = (geo?.features || [])
+    .map(f => {
+      const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      const pt = labelPoint(polys);
+      return pt
+        ? {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: pt },
+            properties: {
+              name: f.properties.regime,
+              weak: byName.get(f.properties.regime)?.weak ? true : undefined,
+              color: byName.get(f.properties.regime)?.color || '#3b3226',
+            },
+          }
+        : null;
+    })
+    .filter(Boolean);
+}
+
+// ── 现代地名点位：minzoom/maxzoom 声明式分层 + 各级开关（visibility）──
+// 分层阈值按视野覆盖粗定：<2.2 全国看省名；2.2–4.8 数省看省市；≥4.8 放大看市县。
+const MP_LAYERS = {
+  province: { minzoom: 0, maxzoom: 4.8, icon: 'modern-mp', fontSize: 11, color: '#514634' },
+  city: { minzoom: 2.2, maxzoom: 24, icon: 'modern-mc', fontSize: 10, color: '#6a5f4c' },
+  district: { minzoom: 4.8, maxzoom: 24, icon: 'modern-md', fontSize: 9, color: '#6a5f4c' },
+};
+let modernLevelConfig = { province: true, city: true, district: true };
+
+const source = (id, extra = {}) => ({
+  [id]: { type: 'geojson', data: EMPTY, ...extra },
+});
+
+function buildLayers() {
+  return [
+    // 邻国：淡墨边界 + 极淡底色，随「现代界线」开关显隐
+    {
+      id: 'neighbors-fill', source: 'neighbors', type: 'fill',
+      paint: { 'fill-color': NEIGHBOR_FILL_ON },
+    },
+    {
+      id: 'neighbors-line', source: 'neighbors', type: 'line',
+      paint: { 'line-color': NEIGHBOR_BORDER_ON, 'line-width': 0.6 },
+    },
+    // 多政权并立：一政权一 feature；weak（游牧/藩属）更淡退后
+    {
+      id: 'regime-fill', source: 'regime', type: 'fill',
+      paint: {
+        'fill-color': ['get', 'color'],
+        'fill-opacity': ['case', ['boolean', ['get', 'weak'], false], 0.20, 0.35],
+      },
+    },
+    {
+      id: 'regime-line', source: 'regime', type: 'line',
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-opacity': ['case', ['boolean', ['get', 'weak'], false], 0.60, 1],
+        'line-width': ['case', ['boolean', ['get', 'weak'], false], 1, 1.4],
+      },
+    },
+    // 现代省界：淡墨实线
+    {
+      id: 'provinces-fill', source: 'provinces', type: 'fill',
+      paint: { 'fill-color': PROVINCE_FILL_ON },
+    },
+    {
+      id: 'provinces-line', source: 'provinces', type: 'line',
+      paint: { 'line-color': PROVINCE_BORDER_ON, 'line-width': 0.8 },
+    },
+    // 本朝政区界：朱砂虚线 + feature-state 悬浮/选中高亮（fill 常态透明，供命中检测）
+    {
+      id: 'divisions-fill', source: 'divisions', type: 'fill',
+      paint: {
+        'fill-color': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false], 'rgba(158, 61, 44, 0.14)',
+          ['boolean', ['feature-state', 'hover'], false], 'rgba(158, 61, 44, 0.10)',
+          'rgba(0,0,0,0)',
+        ],
+      },
+    },
+    {
+      id: 'divisions-line', source: 'divisions', type: 'line',
+      paint: {
+        'line-color': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false], DIVISION_SELECT_BORDER,
+          ['boolean', ['feature-state', 'hover'], false], DIVISION_HOVER_BORDER,
+          DIVISION_BORDER_ON,
+        ],
+        'line-width': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false], 2.6,
+          ['boolean', ['feature-state', 'hover'], false], 2.2,
+          1.1,
+        ],
+        'line-dasharray': DIVISION_DASH,
+      },
+    },
+    // 现代国界：实线参照
+    {
+      id: 'modern-line', source: 'modern', type: 'line',
+      paint: { 'line-color': MODERN_BORDER_ON, 'line-width': 1 },
+    },
+    // 现代地名三级（声明式分层 + 三级开关 visibility；初始隐藏随主开关开启）
+    ...Object.entries(MP_LAYERS).map(([level, cfg]) => ({
+      id: `modern-places-${level}`,
+      source: 'modern-places',
+      type: 'symbol',
+      minzoom: cfg.minzoom,
+      maxzoom: cfg.maxzoom,
+      layout: {
+        visibility: 'none',
+        'icon-image': cfg.icon,
+        'text-field': ['get', 'name'],
+        'text-font': [KAITI_STACK],
+        'text-size': cfg.fontSize,
+        'text-anchor': 'left',
+        'text-offset': [0.55, 0],
+        'text-justify': 'left',
+      },
+      paint: {
+        'text-color': cfg.color,
+        'text-halo-color': 'rgba(246, 238, 217, 0.9)',
+        'text-halo-width': 2,
+      },
+      filter: ['==', ['get', 'level'], level],
+    })),
+    // 政区名注记：楷体，字号可调；面积大者优先占位（symbol-sort-key 升序）
+    {
+      id: 'div-labels', source: 'div-labels', type: 'symbol',
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': [KAITI_STACK],
+        'text-size': labelFontSize,
+        'symbol-sort-key': ['get', 'sortKey'],
+      },
+      paint: {
+        'text-color': '#3b3226',
+        'text-halo-color': 'rgba(246, 238, 217, 0.85)',
+        'text-halo-width': 2,
+      },
+    },
+    // 王朝名称大字：政权色楷体（史图式朝代注记）
+    {
+      id: 'regime-labels', source: 'regime-labels', type: 'symbol',
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': [KAITI_STACK],
+        'text-size': ['case', ['boolean', ['get', 'weak'], false], 15, 26],
+        'text-letter-spacing': 0.15,
+      },
+      paint: {
+        'text-color': ['case', ['boolean', ['get', 'weak'], false], '#6a5f4c', ['get', 'color']],
+        'text-halo-color': 'rgba(246, 238, 217, 0.75)',
+        'text-halo-width': ['case', ['boolean', ['get', 'weak'], false], 2, 3],
+      },
+    },
+    // 都城光环：外圈空心大圆，衬王都级
+    {
+      id: 'places-ring', source: 'places', type: 'symbol',
+      filter: ['==', ['get', 'kind'], '都城'],
+      layout: { 'icon-image': 'place-ring', 'icon-allow-overlap': true, 'icon-ignore-placement': true },
+    },
+    // 断面据点层：符号分级 + 楷体标注，标注方位四向轮转错开密集区（都城恒取上方示尊）
+    {
+      id: 'places', source: 'places', type: 'symbol',
+      layout: {
+        'icon-image': [
+          'match', ['get', 'kind'],
+          '都城', 'place-capital', '都邑', 'place-city', '方国', 'place-state',
+          '部族', 'place-tribe', 'place-site',
+        ],
+        'text-field': ['get', 'name'],
+        'text-font': [KAITI_STACK],
+        'text-size': labelFontSize,
+        'text-anchor': ['get', 'anchor'],
+        'text-offset': [
+          'match', ['get', 'anchor'],
+          'top', ['literal', [0, 0.5]],
+          'bottom', ['literal', [0, -0.5]],
+          'left', ['literal', [-0.55, 0]],
+          ['literal', [0.55, 0]],
+        ],
+      },
+      paint: {
+        'text-color': '#3b3226',
+        'text-halo-color': 'rgba(246, 238, 217, 0.85)',
+        'text-halo-width': 2,
+      },
+    },
+    // 事件圆点：朱砂
+    {
+      id: 'events', source: 'events', type: 'circle',
+      paint: {
+        'circle-radius': dotSize / 2,
+        'circle-color': EVENT_DOT,
+        'circle-stroke-color': PAPER,
+        'circle-stroke-width': 1.6,
+      },
+    },
+  ];
 }
 
 export async function initMap(el, handlers) {
@@ -334,8 +598,17 @@ export async function initMap(el, handlers) {
   modernGeo = await fetchJson('geo/modern.json');
   neighborGeo = await fetchJson('geo/neighbors.json');
   provinceGeo = await fetchJson('geo/provinces.json');
+  const fontFaces = await fetchJson('fonts/lxgw/faces.json').catch((e) => {
+    console.warn('楷体字体声明加载失败，回落系统楷体:', e);
+    return null;
+  });
+  // woff2 url 绝对化：相对路径在无尾斜杠 URL 下会丢子路径
+  if (fontFaces) {
+    for (const faces of Object.values(fontFaces)) {
+      for (const f of faces) f.url = BASE + f.url;
+    }
+  }
 
-  chart = echarts.init(el);
   // 窄屏放大圆点便于点按
   const compact = window.matchMedia('(max-width: 900px)').matches;
   dotSize = compact ? 12 : 9;
@@ -343,157 +616,75 @@ export async function initMap(el, handlers) {
   labelFontSize = compact ? 11 : 12;
   const savedSize = Number(localStorage.getItem(DIV_FONT_KEY));
   if (savedSize >= 9 && savedSize <= 20) labelFontSize = clampFontSize(savedSize);
-  // 未自定义字号时跟随窄屏断面：载入瞬间视口可能尚未稳定（如内嵌浏览器重载）
   window
     .matchMedia('(max-width: 900px)')
     .addEventListener('change', e => {
       if (localStorage.getItem(DIV_FONT_KEY)) return;
       applyDivisionFontSize(e.matches ? 11 : 12);
     });
+
+  const style = {
+    version: 8,
+    // glyphs 不设：text-font 全部由 font-faces 的 LXGW 分片覆盖，
+    // 分片缺字时逐级回落 localIdeographFontFamily（楷体系统栈）
+    'font-faces': fontFaces || undefined,
+    sources: {
+      ...source('neighbors'),
+      ...source('regime'),
+      ...source('provinces'),
+      ...source('divisions', { promoteId: 'name' }),
+      ...source('modern'),
+      ...source('modern-places'),
+      ...source('div-labels'),
+      ...source('regime-labels'),
+      ...source('places'),
+      ...source('events'),
+    },
+    layers: buildLayers(),
+  };
+
+  map = new MapLibreMap({
+    container: el,
+    style,
+    // CJK 分片未覆盖/加载失败时的系统楷体兜底
+    localIdeographFontFamily: LOCAL_KAITI,
+    maxBounds: [[60, 5], [148, 65]],
+    maxZoom: 14,
+    doubleClickZoom: false,
+    attributionControl: false,
+    fadeDuration: 0,
+  });
+  // 取景框留 2% 边（原 ECharts layoutSize 96% 的等价），padding 需像素值
+  const pad = Math.round(Math.min(el.clientWidth, el.clientHeight) * 0.02);
+  map.fitBounds(BOUNDS, { animate: false, padding: { top: pad, bottom: pad, left: pad, right: pad } });
+  map.setMinZoom(map.getZoom());
+
   divTipEl = document.getElementById('div-tip');
   bindDivisionHover();
-  chart.on('click', params => {
-    // div-labels 也是 scatter 但 silent 且无 event 数据，须排除
-    if (
-      (params.seriesType === 'scatter' || params.seriesType === 'effectScatter') &&
-      params.data?.event
-    ) {
-      // 点击后地图会飞行缩放到事件点，原位置的 tooltip 会悬空失真，先收起
-      chart.dispatchAction({ type: 'hideTip' });
-      onEventClick?.(params.data.event, { fromMap: true });
-    }
+  bindHoverTips();
+
+  map.on('click', 'events', e => {
+    const raw = e.features?.[0]?.properties?.__event;
+    if (!raw) return;
+    let event = null;
+    try { event = JSON.parse(raw); } catch { return; }
+    hideDivTip();
+    onEventClick?.(event, { fromMap: true });
   });
+
+  // 静态底图与 icon 一次注入（addImage 需待 style 加载完成）
+  map.on('load', () => {
+    applyPlaceIcons('#9e3d2c');
+    applyModernPlaceIcons();
+    map.getSource('modern').setData(modernGeo);
+    map.getSource('neighbors').setData(neighborGeo);
+    map.getSource('provinces').setData(provinceGeo);
+  });
+
   // 用 ResizeObserver 而非 window resize：boot 后时间轴填充等布局重排
   // 不会触发 window resize，画布若不跟随会溢出盖住底栏
-  const ro = new ResizeObserver(() => chart.resize());
+  const ro = new ResizeObserver(() => map.resize());
   ro.observe(el);
-  // 缩放/平移时按当前 zoom 重算现代地名分层（节流，避免拖动每帧 setOption）
-  let roamTimer = null;
-  chart.on('georoam', () => {
-    if (!modernPlacesVisible) return;
-    clearTimeout(roamTimer);
-    roamTimer = setTimeout(applyModernPlaces, 120);
-  });
-}
-
-// 事件提示卡：全局与 series 级共用同一份配置。
-// 全局 formatter 同时兜底 geo 政区区域悬浮（geo.tooltip 并不总能接管区域 hover）
-const eventTooltip = () => ({
-  backgroundColor: 'rgba(252, 247, 234, 0.97)',
-  borderColor: '#c5b48c',
-  textStyle: { color: '#3b3226' },
-  confine: true,
-  padding: [10, 14],
-  // 兜底限高，防止长描述把 tooltip 顶出画布
-  extraCssText:
-    'max-height:40vh;overflow-y:auto;box-shadow:0 4px 18px rgba(80, 66, 40, 0.25);',
-  formatter: p => {
-    if (!p.data?.event) return '';
-    const e = p.data.event;
-    return `<div class="tip-year">${e.yearLabel}</div>
-            <div class="tip-title">${e.title}</div>
-            ${e.location.name ? `<div class="tip-loc">${e.location.name}</div>` : ''}
-            <div class="tip-desc">${e.description}</div>`;
-  },
-});
-
-// ── 据点层（都城/都邑/方国/遗址）：符号分级 + 楷体常显标注 ────
-// 色彩沿用断面主政权色（深=都城，中=都邑/方国，遗址空心描边）
-const placeStyle = (kind, color) => {
-  if (kind === '都城') return { symbol: 'circle', symbolSize: 9, itemStyle: { color, borderColor: PAPER, borderWidth: 1.2 } };
-  if (kind === '都邑') return { symbol: 'circle', symbolSize: 7, itemStyle: { color: rgba(color, 0.90) } };
-  if (kind === '方国') return { symbol: 'diamond', symbolSize: 7, itemStyle: { color: rgba(color, 0.75) } };
-  if (kind === '部族') return { symbol: 'diamond', symbolSize: 5.5, itemStyle: { color: 'rgba(0,0,0,0)', borderColor: rgba(color, 0.55), borderWidth: 1.4 } };
-  return { symbol: 'circle', symbolSize: 6, itemStyle: { color: 'rgba(0,0,0,0)', borderColor: rgba(color, 0.85), borderWidth: 1.6 } };
-};
-
-// 标签方位四向轮转，错开密集区的名字（都城恒取上方示尊）
-const LABEL_POS = ['right', 'bottom', 'left', 'top'];
-const placeSeriesData = (snap, features) => {
-  const color = primaryColor(snap);
-  return (features || []).map((f, i) => {
-    const p = f.properties;
-    return {
-      name: p.name, value: f.geometry.coordinates,
-      kind: p.kind, today: p.today, note: p.note || '',
-      label: { position: p.kind === '都城' ? 'top' : LABEL_POS[i % LABEL_POS.length] },
-      ...placeStyle(p.kind, color),
-    };
-  });
-};
-
-// 都城光环（外圈空心大圆，衬出王都级）
-const placeRingData = (snap, features) => {
-  const color = primaryColor(snap);
-  return (features || [])
-    .filter(f => f.properties.kind === '都城')
-    .map(f => ({
-      name: f.properties.name, value: f.geometry.coordinates,
-      symbol: 'circle', symbolSize: 17,
-      itemStyle: { color: 'rgba(0,0,0,0)', borderColor: rgba(color, 0.55), borderWidth: 1.4 },
-    }));
-};
-
-const placeTooltip = {
-  backgroundColor: 'rgba(252, 247, 234, 0.97)',
-  borderColor: '#c5b48c',
-  textStyle: { color: '#3b3226' },
-  confine: true,
-  padding: [10, 14],
-  extraCssText: 'max-height:40vh;overflow-y:auto;box-shadow:0 4px 18px rgba(80, 66, 40, 0.25);',
-  formatter: p => p.data?.kind
-    ? `<div class="tip-title">${p.data.name}</div>
-       <div class="tip-loc">${p.data.kind} · 今${p.data.today}</div>
-       ${p.data.note ? `<div class="tip-desc">${p.data.note}</div>` : ''}`
-    : '',
-};
-
-// 王朝名称大字：政权疆域形心定位，政权色楷体（weak 政权小一号）
-let regimeLabelData = [];
-function buildRegimeLabels(snap, geo) {
-  const byName = new Map(snap.regimes.map(r => [r.name, r]));
-  regimeLabelData = (geo?.features || [])
-    .map(f => {
-      const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
-      const pt = labelPoint(polys);
-      return pt ? { name: f.properties.regime, value: pt, weak: byName.get(f.properties.regime)?.weak } : null;
-    })
-    .filter(Boolean);
-}
-
-// ── 现代地名点位：按缩放分层 + 各级开关（georoam 节流刷新）──
-// 分层阈值按视野覆盖粗定：<2.2 全国看省名；2.2–4.8 数省看省市；≥4.8 放大看市县。
-// 分层决定「该缩放下允许出现的级别」，modernLevels 决定「用户勾选显示的级别」，取交集
-const modernPlaceLevels = zoom =>
-  zoom < 2.2 ? { province: true } : zoom < 4.8 ? { province: true, city: true } : { city: true, district: true };
-
-let modernLevelConfig = { province: true, city: true, district: true };
-
-function modernPlaceData() {
-  if (!modernPlacesVisible || !modernPlacesGeo) return [];
-  const zoom = chart.getOption()?.geo?.[0]?.zoom ?? 1;
-  const allow = modernPlaceLevels(zoom);
-  return modernPlacesGeo.features
-    .filter(f => {
-      const lv = f.properties.level;
-      return allow[lv] && modernLevelConfig[lv];
-    })
-    .map(f => {
-      const p = f.properties;
-      const big = p.level === 'province';
-      const mid = p.level === 'city';
-      return {
-        name: p.name, value: f.geometry.coordinates,
-        symbol: 'circle',
-        symbolSize: big ? 4 : mid ? 3 : 2.2,
-        itemStyle: { color: big ? 'rgba(60,50,35,0.8)' : mid ? 'rgba(60,50,35,0.55)' : 'rgba(60,50,35,0.4)' },
-        label: { fontSize: big ? 11 : mid ? 10 : 9, color: big ? '#514634' : '#6a5f4c' },
-      };
-    });
-}
-
-function applyModernPlaces() {
-  chart?.setOption({ series: [{ id: 'modern-places', data: modernPlaceData() }] });
 }
 
 export async function setModernPlacesVisible(visible) {
@@ -514,188 +705,83 @@ export function setModernPlaceLevels(levels) {
   applyModernPlaces();
 }
 
-function baseOption(snap, mapName) {
-  return {
-    animationDurationUpdate: 550,
-    geo: {
-      map: mapName,
-      roam: true,
-      zoom: 1.05,
-      scaleLimit: { min: 1, max: 14 },
-      boundingCoords: BOUNDS,
-      layoutCenter: ['50%', '50%'],
-      layoutSize: '96%',
-      // geo 的 region tooltip 机制不可靠（曾出现占位名泄漏/不触发），
-      // 政区悬浮提示由自定义 div-tip 实现（zr mousemove + 点在多边形检测），
-      // 这里恒返回空串避免双弹；事件圆点提示仍走 series 级 tooltip
-      tooltip: { show: true, formatter: () => '' },
-      itemStyle: {
-        areaColor: 'transparent',
-        borderColor: divisionsVisible ? DIVISION_BORDER_ON : 'rgba(0,0,0,0)',
-        borderWidth: 1.1,
-        borderType: DIVISION_DASH,
-      },
-      // 悬浮/选中高亮不走 geo emphasis/select 状态机（实测 select 会波及全部
-      // region），由 bindDivisionHover 以 region itemStyle 补丁手动驱动
-      emphasis: { disabled: false, itemStyle: { areaColor: 'rgba(158, 61, 44, 0.08)' } },
-      select: { disabled: true },
-      regions: sentinelRegions(snap),
-    },
-    tooltip: {
-      trigger: 'item',
-      ...eventTooltip(),
-    },
-    series: [
-      {
-        // 王朝名称大字：政权形心定位，政权色楷体（史图式朝代注记），
-        // 压在疆域色块之上、其他注记之下
-        id: 'regime-labels',
-        type: 'scatter',
-        coordinateSystem: 'geo',
-        symbolSize: 0,
-        itemStyle: { color: 'transparent' },
-        silent: true,
-        z: 1,
-        tooltip: { show: false },
-        label: {
-          show: true,
-          formatter: p => p.name,
-          fontSize: 26,
-          fontWeight: 600,
-          fontFamily: "'Kaiti SC','STKaiti','KaiTi','FangSong',serif",
-          color: '#3b3226',
-          textBorderColor: 'rgba(246, 238, 217, 0.75)',
-          textBorderWidth: 3,
-        },
-        emphasis: { disabled: true },
-        data: regimeLabelData.map(d => ({
-          ...d,
-          label: d.weak
-            ? { fontSize: 15, fontWeight: 400, color: '#6a5f4c', textBorderWidth: 2 }
-            : { color: rgba(snap.regimes.find(r => r.name === d.name)?.color || '#3b3226', 0.95) },
-        })),
-      },
-      {
-        // 现代地名点位：墨=今（黑体细字+小墨点），随「现代地名」开关按缩放分层，
-        // 静默不参与悬浮/点击，避免 3000+ 点位淹没事件与据点交互
-        id: 'modern-places',
-        type: 'scatter',
-        coordinateSystem: 'geo',
-        silent: true,
-        z: 1,
-        tooltip: { show: false },
-        labelLayout: { hideOverlap: true },
-        label: {
-          show: true,
-          formatter: p => p.name,
-          fontFamily: "'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif",
-          color: '#6a5f4c',
-          textBorderColor: 'rgba(246, 238, 217, 0.9)',
-          textBorderWidth: 2,
-        },
-        data: [],
-      },
-      {
-        // 政区名注记：静默（不拦截悬浮/点击），重叠自动避让，随「政区界」开关显隐
-        id: 'div-labels',
-        type: 'scatter',
-        coordinateSystem: 'geo',
-        symbolSize: 0,
-        itemStyle: { color: 'transparent' },
-        silent: true,
-        z: 1,
-        tooltip: { show: false },
-        labelLayout: { hideOverlap: true },
-        label: {
-          show: true,
-          formatter: p => p.name,
-          fontSize: labelFontSize,
-          fontFamily: "'Kaiti SC','STKaiti','KaiTi','FangSong',serif",
-          color: '#3b3226',
-          textBorderColor: 'rgba(246, 238, 217, 0.85)',
-          textBorderWidth: 2,
-        },
-        emphasis: { disabled: true },
-        data: divLabelData,
-      },
-      {
-        // 都城光环：外圈空心大圆，衬王都级
-        id: 'places-ring',
-        type: 'scatter',
-        coordinateSystem: 'geo',
-        silent: true,
-        z: 2,
-        tooltip: { show: false },
-        emphasis: { disabled: true },
-        data: placeRingData(snap, placeGeoFeatures),
-      },
-      {
-        // 断面据点层（都城/都邑/方国/遗址）：楷体常显标注，悬浮出今地名对照
-        id: 'places',
-        type: 'scatter',
-        coordinateSystem: 'geo',
-        z: 2,
-        labelLayout: { hideOverlap: true },
-        label: {
-          show: true,
-          formatter: p => p.name,
-          position: 'right',
-          distance: 5,
-          fontSize: labelFontSize,
-          fontFamily: "'Kaiti SC','STKaiti','KaiTi','FangSong',serif",
-          color: '#3b3226',
-          textBorderColor: 'rgba(246, 238, 217, 0.85)',
-          textBorderWidth: 2,
-        },
-        emphasis: { scale: 1.35 },
-        tooltip: placeTooltip,
-        data: placeSeriesData(snap, placeGeoFeatures),
-      },
-      {
-        id: 'evt',
-        type: 'scatter',
-        coordinateSystem: 'geo',
-        symbolSize: dotSize,
-        itemStyle: { color: EVENT_DOT, borderColor: PAPER, borderWidth: 1.6 },
-        emphasis: { scale: 1.4, itemStyle: { color: '#7e2f22' } },
-        tooltip: eventTooltip(),
-        data: currentEvents.map(toPoint),
-      },
-      {
-        id: 'sel',
-        type: 'effectScatter',
-        coordinateSystem: 'geo',
-        symbolSize: selSize,
-        rippleEffect: { scale: 2.8, brushType: 'stroke' },
-        itemStyle: { color: primaryColor(snap), borderColor: PAPER, borderWidth: 1.5 },
-        zlevel: 2,
-        tooltip: eventTooltip(),
-        data: selectedEvent ? [toPoint(selectedEvent)] : [],
-      },
-    ],
-  };
+function applyModernPlaces() {
+  if (!map || !map.getSource('modern-places')) return;
+  map.getSource('modern-places').setData(
+    modernPlacesVisible && modernPlacesGeo ? modernPlacesGeo : EMPTY
+  );
+  for (const level of Object.keys(MP_LAYERS)) {
+    if (!map.getLayer(`modern-places-${level}`)) continue;
+    map.setLayoutProperty(
+      `modern-places-${level}`,
+      'visibility',
+      modernPlacesVisible && modernLevelConfig[level] ? 'visible' : 'none'
+    );
+  }
 }
 
-const toPoint = e => ({ name: e.title, value: [e.location.lng, e.location.lat], event: e });
+// 事件 → GeoJSON 点要素；GeoJSON 瓦片化会序列化 properties，
+// 事件对象（含嵌套结构）以 JSON 字符串挂载，点击/悬浮时解析
+const toEventFeature = e => ({
+  type: 'Feature',
+  geometry: { type: 'Point', coordinates: [e.location.lng, e.location.lat] },
+  properties: { __event: JSON.stringify(e) },
+});
+
+const LABEL_POS = ['right', 'bottom', 'left', 'top'];
+function toPlaceFeatures(features) {
+  return (features || []).map((f, i) => {
+    const p = f.properties;
+    return {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: f.geometry.coordinates },
+      properties: {
+        name: p.name, kind: p.kind, today: p.today, note: p.note || '',
+        anchor: p.kind === '都城' ? 'top' : LABEL_POS[i % LABEL_POS.length],
+      },
+    };
+  });
+}
 
 export async function showSnapshot(snap, events, view = {}) {
   const geo = await fetchGeo(snap);
   const [divisions, places] = await Promise.all([fetchDivisions(snap), fetchPlaces(snap)]);
   divisionGeo = divisions;
   placeGeoFeatures = places?.features || [];
-  // 射线法检索结构：每政区保留多边形环组
-  divisionRings = (divisions?.features || []).map(f => ({
-    name: f.properties.name,
-    type: f.properties.type,
-    polys: f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates,
-  }));
+  const byName = new Map(snap.regimes.map(r => [r.name, r]));
+  // 政权配色注入要素属性：paint 表达式恒定，换断面只换数据
+  const regimeFc = {
+    type: 'FeatureCollection',
+    features: (geo?.features || []).map(f => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        color: byName.get(f.properties.regime)?.color || '#9e3d2c',
+        weak: byName.get(f.properties.regime)?.weak ? true : undefined,
+      },
+    })),
+  };
   divLabelData = divisionsVisible
-    ? divisionRings
-        .map(d => ({ d, area: Math.max(...d.polys.map(p => ringArea(p[0]))) }))
+    ? (divisions?.features || [])
+        .map(f => ({
+          f,
+          area: Math.max(
+            ...((f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates).map(
+              p => ringArea(p[0])
+            ))
+          ),
+        }))
         .sort((a, b) => b.area - a.area)
-        .map(({ d }) => {
-          const p = labelPoint(d.polys);
-          return p ? { name: d.name, value: p } : null;
+        .map(({ f, area }, i) => {
+          const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+          const pt = labelPoint(polys);
+          return pt
+            ? {
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: pt },
+                properties: { name: f.properties.name, sortKey: i },
+              }
+            : null;
         })
         .filter(Boolean)
     : [];
@@ -705,77 +791,88 @@ export async function showSnapshot(snap, events, view = {}) {
   resetDivisionHighlights();
   buildRegimeLabels(snap, geo);
 
-  const mapName = `map_${snap.id}_${Date.now() % 1e6}`;
-  // 图层自底向上：邻国 → 各政权疆域 → 现代省界 → 断面政区界 → 现代轮廓
-  const combined = {
-    type: 'FeatureCollection',
-    features: [
-      ...neighborGeo.features,
-      ...geo.features,
-      ...provinceGeo.features,
-      ...(divisionsVisible && divisionGeo ? divisionGeo.features : []),
-      ...modernGeo.features,
-    ],
-  };
-  echarts.registerMap(mapName, combined);
-
-  // 转场：先淡出画布再换图，规避 geo 换图无过渡的生硬感
+  // 转场：先淡出画布再换数据，规避数据切换的生硬感
   container.style.opacity = '0.35';
   setTimeout(() => {
-    const opt = baseOption(snap, mapName);
-    // 保持视野：显式 view 优先；未指定时继承当前缩放/中心（切换断面不再跳回全国），
-    // 首次渲染 chart 无 geo 选项则用 baseOption 默认取景
-    const prev = chart.getOption()?.geo?.[0];
-    opt.geo.center = view.center || prev?.center || opt.geo.center;
-    opt.geo.zoom = view.zoom || prev?.zoom || opt.geo.zoom;
-    chart.setOption(opt, { notMerge: true });
-    // notMerge 会清掉现代地名层的数据，换图后按当前缩放回填
-    if (modernPlacesVisible) applyModernPlaces();
+    applyPlaceIcons(primaryColor(snap));
+    map.getSource('regime').setData(regimeFc);
+    map.getSource('divisions').setData(divisionsVisible && divisionGeo ? divisionGeo : EMPTY);
+    map.getSource('div-labels').setData({ type: 'FeatureCollection', features: divLabelData });
+    map.getSource('regime-labels').setData({ type: 'FeatureCollection', features: regimeLabelData });
+    map.getSource('places').setData({ type: 'FeatureCollection', features: toPlaceFeatures(placeGeoFeatures) });
+    map.getSource('events').setData({
+      type: 'FeatureCollection',
+      features: events.map(toEventFeature),
+    });
+    applyModernPlaces();
+    // 保持视野：显式 view 优先；未指定时继承当前缩放/中心（切换断面不再跳回全国）
+    if (view.center || view.zoom) {
+      map.jumpTo({ center: view.center || map.getCenter(), zoom: view.zoom || map.getZoom() });
+    }
     container.style.opacity = '1';
   }, 160);
 }
 
-// 「政区界」开关：重建注册地图（含/不含政区要素），保持当前视野
+// 「政区界」开关：图层显隐切换（无需重建数据），保持当前视野
 export async function setDivisionsVisible(visible) {
   if (divisionsVisible === visible) return;
   divisionsVisible = visible;
   if (!visible) hideDivTip();
   resetDivisionHighlights();
   if (!currentSnap) return;
-  const opt = chart.getOption();
-  const g = opt.geo?.[0] || {};
-  await showSnapshot(currentSnap, currentEvents, { center: g.center, zoom: g.zoom });
-}
-
-let showTipTimer = null;
-
-export function selectEvent(event) {
-  if (!currentSnap) return;
-  selectedEvent = event;
-  const opt = chart.getOption();
-  const curZoom = opt.geo?.[0]?.zoom ?? 1;
-  chart.setOption({
-    geo: { center: [event.location.lng, event.location.lat], zoom: Math.max(curZoom, 3.8) },
-    series: [
-      { id: 'evt', data: currentEvents.map(toPoint) },
-      { id: 'sel', data: [toPoint(event)] },
-    ],
-  });
-  // 飞行落定后在事件点旁重新弹出提示卡，展示完整描述
-  // （窄屏抽屉模式下描述已由抽屉展示，不再弹卡避免遮挡地图）
-  clearTimeout(showTipTimer);
-  if (!window.matchMedia('(max-width: 900px)').matches) {
-    showTipTimer = setTimeout(() => {
-      const idx = currentEvents.findIndex(e => e.title === event.title);
-      if (idx >= 0) chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: idx });
-    }, 620);
+  const vis = visible ? 'visible' : 'none';
+  for (const layer of ['divisions-fill', 'divisions-line', 'div-labels']) {
+    if (map.getLayer(layer)) map.setLayoutProperty(layer, 'visibility', vis);
+  }
+  if (map.getSource('divisions')) {
+    map.getSource('divisions').setData(visible && divisionGeo ? divisionGeo : EMPTY);
   }
 }
 
 export function setModernVisible(visible) {
   modernVisible = visible;
   if (!currentSnap) return;
-  paintGeoRegions();
+  const vis = visible ? 'visible' : 'none';
+  for (const layer of [
+    'neighbors-fill', 'neighbors-line', 'provinces-fill', 'provinces-line', 'modern-line',
+  ]) {
+    if (map.getLayer(layer)) map.setLayoutProperty(layer, 'visibility', vis);
+  }
+}
+
+// ── 选中事件：飞行 + DOM 涟漪标记 + 落定弹卡 ──────────────────
+let rippleMarker = null;
+let showTipTimer = null;
+
+export function selectEvent(event) {
+  if (!currentSnap) return;
+  selectedEvent = event;
+  const lngLat = [event.location.lng, event.location.lat];
+  const curZoom = map.getZoom();
+  map.flyTo({ center: lngLat, zoom: Math.max(curZoom, 3.8), duration: 600 });
+  // 涟漪标记：DOM 元素 + CSS 动画（替代 effectScatter）
+  if (rippleMarker) rippleMarker.remove();
+  const el = document.createElement('div');
+  el.className = 'evt-ripple';
+  el.style.setProperty('--ripple-color', primaryColor(currentSnap));
+  rippleMarker = new Marker({ element: el })
+    .setLngLat(lngLat)
+    .setOffset([0, 0])
+    .addTo(map);
+  // 飞行落定后在事件点旁重新弹出提示卡，展示完整描述
+  // （窄屏抽屉模式下描述已由抽屉展示，不再弹卡避免遮挡地图）
+  clearTimeout(showTipTimer);
+  if (!window.matchMedia('(max-width: 900px)').matches) {
+    showTipTimer = setTimeout(() => {
+      if (!selectedEvent) return;
+      const pt = map.project(lngLat);
+      divTipEl.hidden = false;
+      divTipEl.innerHTML = eventTipHtml(event);
+      const w = container.clientWidth;
+      divTipEl.style.left = Math.min(pt.x + 18, w - 200) + 'px';
+      divTipEl.style.top = Math.max(pt.y - 60, 8) + 'px';
+    }, 620);
+  }
 }
 
 export function preload(snap) {
@@ -792,7 +889,9 @@ export function getDivisionFontSize() {
 
 function applyDivisionFontSize(px) {
   labelFontSize = clampFontSize(px);
-  chart?.setOption({ series: [{ id: 'div-labels', label: { fontSize: labelFontSize } }] });
+  for (const layer of ['div-labels', 'places']) {
+    if (map?.getLayer(layer)) map.setLayoutProperty(layer, 'text-size', labelFontSize);
+  }
 }
 
 export function setDivisionFontSize(px) {

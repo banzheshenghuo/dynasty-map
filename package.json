@@ -8,14 +8,16 @@
     "build": "vite build",
     "preview": "vite preview",
     "data": "node tools/build-data.mjs",
+    "fonts": "node tools/gen-fonts.mjs",
     "check": "node tools/validate.mjs && vite build",
     "fetch": "node tools/fetch-sources.mjs"
   },
   "dependencies": {
     "d3-delaunay": "^6.0.4",
-    "echarts": "^5.6.0"
+    "maplibre-gl": "^6.11.2"
   },
   "devDependencies": {
+    "lxgw-wenkai-webfont": "^1.7.0",
     "polygon-clipping": "^0.15.7",
     "vite": "^6.0.0"
   }

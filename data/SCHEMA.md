@@ -1,7 +1,7 @@
 # 数据契约（Data Contract）
 
 `data/` 是纯静态 JSON / GeoJSON：无数据库、无服务端、无运行时远程依赖。任何技术栈
-只需实现本契约即可替换前端（当前消费方：ECharts 图层，见文末）。
+只需实现本契约即可替换前端（当前消费方：MapLibre 图层，见文末）。
 
 坐标系一律 WGS84 经纬度 `[lng, lat]`。字段变更须同步 `tools/validate.mjs` 与本文档。
 
@@ -115,12 +115,17 @@ FeatureCollection，**Point** 几何（省/市/县三级行政区驻地，随「
 
 ## 图层识别约定
 
-前端把多个 FeatureCollection 合并后按 `properties` 判别图层：
+前端把多个 FeatureCollection 按 source 分层渲染（MapLibre，2026-10 由 ECharts geo 迁移）：
 
-- 哨兵名（`__` 前缀）：`__regime_*` / `__modern__` / `__provinces__` / `__neighbors__`
-- 政区要素无哨兵名，以 `layer = "division"` 判别
-- 点位层不进 registerMap，以 `layer = "place"`（断面据点）/ `"modern-place"`
-  （现代地名）判别，scatter 系列渲染
+- 每类图层一个 GeoJSON source：`regime`（疆域）/ `divisions`（政区，`promoteId: "name"`）/
+  `modern` / `provinces` / `neighbors`（对照底图），点位层 `places` / `modern-places` / `events`
+- 政权配色注入要素 `properties.color`（源自 timeline.json regimes，渲染层 paint 表达式读取）
+
+## 渲染资源目录（非数据契约）
+
+`data/fonts/` 为渲染层资源（楷体 woff2 分片 + fontFaces 声明），由
+`tools/gen-fonts.mjs` 从 npm 包 `lxgw-wenkai-webfont`（OFL）生成，validate 豁免；
+与 `data/geo/` 的数据契约无关，替换前端时可不迁移。
 
 ## 消费方
 

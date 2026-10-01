@@ -31,9 +31,38 @@ body {
   overscroll-behavior: none;
 }
 
-/* 触摸设备：消除 300ms 双击缩放延迟；地图画布手势交给 ECharts */
+/* 触摸设备：消除 300ms 双击缩放延迟；地图画布手势交给 MapLibre */
 .evt-item, .toggle, #drawer-btn, .drawer-grip { touch-action: manipulation; }
 #map canvas { touch-action: none; }
+/* MapLibre 画布铺满容器（原 ECharts 同款） */
+#map .maplibregl-canvas { position: absolute; inset: 0; }
+.maplibregl-ctrl-attrib { display: none; }
+
+/* 选中事件涟漪标记（DOM Marker + CSS 动画，替代 effectScatter）：
+   中心实点 + 两圈扩散光环，颜色随断面主政权色（--ripple-color） */
+.evt-ripple {
+  width: 0;
+  height: 0;
+  --ripple-color: #9e3d2c;
+}
+.evt-ripple::before,
+.evt-ripple::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  border: 2px solid var(--ripple-color);
+  animation: evt-ripple-wave 1.6s ease-out infinite;
+}
+.evt-ripple::after { animation-delay: 0.8s; }
+@keyframes evt-ripple-wave {
+  0% { transform: scale(0.4); opacity: 0.9; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
 
 /* 政区悬浮纸签（自实现）：贴在 #map 内 */
 #div-tip {
