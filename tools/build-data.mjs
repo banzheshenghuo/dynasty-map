@@ -577,7 +577,24 @@ for (const snap of SNAPSHOTS) {
 
 // ── 时间轴索引 + 事件合并 ───────────────────────────────────
 const EVENTS_SRC = 'https://raw.githubusercontent.com/pessimistcamellia/china-history-map/main/data.js';
-const dataJs = await (await fetch(EVENTS_SRC)).text();
+// 事件源裸 fetch 网络抖动即崩（且崩点在写 timeline.json 之前，geo 已落盘会造成
+// 「半新半旧」产物）——复用镜像+重试的 fetchJson 通道以 text 取回
+const fetchTextWithRetry = async url => {
+  const mirror = url.replace('https://raw.githubusercontent.com/', 'https://cdn.jsdelivr.net/gh/').replace('/master/', '@master/').replace('/main/', '@main/');
+  const urls = mirror === url ? [url] : [url, mirror];
+  let lastErr;
+  for (const u of urls) {
+    for (let i = 0; i < 3; i++) {
+      try {
+        const res = await fetch(u, { signal: AbortSignal.timeout(30000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.text();
+      } catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 2000 * (i + 1))); }
+    }
+  }
+  throw new Error(`fetch 事件源失败 ${url}: ${lastErr.message}`);
+};
+const dataJs = await fetchTextWithRetry(EVENTS_SRC);
 const EVENTS = vm.runInNewContext(dataJs + '\nmodule.exports = EVENTS;', { module: { exports: {} } });
 const yearLabel = y => (y < 0 ? `前${-y}年` : `${y}年`);
 const inChina = e =>
