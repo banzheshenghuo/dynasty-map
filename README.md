@@ -30,7 +30,7 @@ GitHub Pages（/dynasty-map/）
 
 - **数据层 `data/` 是第一原则**：全部为自描述静态文件，入口 `data/timeline.json`（range + 时代分段 + 断面 + 事件），断面指向 `geo/s{id}.json`（疆域，`__regime_{名}` 哨兵）与可选的 `geo/s{id}-div.json`（政区，带 regime 归属）。字段契约见 [data/SCHEMA.md](data/SCHEMA.md)，可整体迁移到其他技术栈（含小程序端）。表现层参数只放 regimes[].color。
 - **管线 `tools/`**：`build-data.mjs` 由 SNAPSHOTS 断面表驱动，产出全部 `data/`；`validate.mjs` 保证「数据 · 契约文档 · 校验器」三者一致；`gen-fonts.mjs` 从 npm 字体分片包生成楷体 woff2 与 font-faces 声明至 `data/fonts/`（渲染资源，validate 豁免）；`sources/` 放手绘源与提取器，`sources/raw/`（gitignore）放下游扫描件。
-- **前端 `src/`**：MapLibre GL JS v6 WebGL 渲染（2026-10 由 ECharts geo 迁移，动机与映射见 [归档方案](doc/active/2026-10-01-渲染引擎迁移-maplibre.md)）：多 source 分层（邻国底色 → 各政权疆域 → 现代省界 → 断面政区界 → 现代轮廓），注记走 symbol 层 GPU 碰撞避让，政区高亮走 feature-state，现代地名缩放分层为 minzoom 声明式；注记形心定位自实现；时间轴为自研「胶片条」组件（无第三方滑杆库）。楷体注记自托管霞鹜文楷 woff2 分片（`tools/gen-fonts.mjs` 产出 `data/fonts/`，MapLibre v6 `font-faces` 声明 + 分片懒加载，加载失败回落系统楷体）。
+- **前端 `src/`**：MapLibre GL JS v6 WebGL 渲染（2026-10 由 ECharts geo 迁移，动机与映射见 [归档方案](doc/archive/2026-10-01-渲染引擎迁移-maplibre.md)）：多 source 分层（邻国底色 → 各政权疆域 → 现代省界 → 断面政区界 → 现代轮廓），注记走 symbol 层 GPU 碰撞避让，政区高亮走 feature-state，现代地名缩放分层为 minzoom 声明式；注记形心定位自实现；时间轴为自研「胶片条」组件（无第三方滑杆库）。楷体注记自托管霞鹜文楷 woff2 分片（`tools/gen-fonts.mjs` 产出 `data/fonts/`，MapLibre v6 `font-faces` 声明 + 分片懒加载，加载失败回落系统楷体）。
 - **部署**：推 `main` 即触发 Actions 构建发布 Pages。
 
 ## 项目基线（2026-10-01）
