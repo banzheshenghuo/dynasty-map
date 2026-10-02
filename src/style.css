@@ -75,7 +75,10 @@ body {
   border-left: 3px solid #9e3d2c; /* 朱砂缘：历史政区签的标记 */
   box-shadow: 0 4px 14px rgba(80, 66, 40, 0.25);
   pointer-events: none;
-  white-space: nowrap;
+  /* 长口径说明（路线 note / 事件描述）需换行；宽窄由内容自适应，上限防贴边溢出 */
+  max-width: min(340px, calc(100% - 16px));
+  max-height: 40vh;
+  overflow-y: auto;
 }
 #div-tip .tip-title { font-size: 13px; margin: 0; }
 #div-tip .tip-loc { margin: 2px 0 0; }

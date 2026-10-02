@@ -194,26 +194,23 @@ function hideDivTip() {
   if (divTipEl) divTipEl.hidden = true;
 }
 
+// 提示卡定位：指针右下 14px；右缘溢出翻转至指针左侧，下缘溢出上收。
+// 宽高用实测值（卡片宽度随内容自适应，上限 340px），不假设固定宽度
+function placeTipEl(px, py) {
+  const w = container.clientWidth, h = container.clientHeight;
+  const tw = divTipEl.offsetWidth, th = divTipEl.offsetHeight;
+  let x = px + 14;
+  if (x + tw > w - 8) x = Math.max(8, px - tw - 14);
+  divTipEl.style.left = x + 'px';
+  divTipEl.style.top = Math.max(8, Math.min(py - 60, h - th - 8)) + 'px';
+}
+
 function showDivTip(px, py, div) {
   if (!divTipEl) return;
   divTipEl.hidden = false;
   divTipEl.innerHTML = `<div class="tip-title">${div.name}</div>
     <div class="tip-loc">${currentSnap?.era || ''} · ${div.type || '政区'}</div>`;
-  const w = container.clientWidth, h = container.clientHeight;
-  divTipEl.style.left = Math.min(px + 14, w - 170) + 'px';
-  divTipEl.style.top = Math.max(py - 52, 8) + 'px';
-}
-
-function showEventTip(px, py, e) {
-  if (!divTipEl) return;
-  divTipEl.hidden = false;
-  divTipEl.innerHTML = `<div class="tip-year">${e.yearLabel}</div>
-    <div class="tip-title">${e.title}</div>
-    ${e.location.name ? `<div class="tip-loc">${e.location.name}</div>` : ''}
-    <div class="tip-desc">${e.description}</div>`;
-  const w = container.clientWidth;
-  divTipEl.style.left = Math.min(px + 14, w - 200) + 'px';
-  divTipEl.style.top = Math.max(py - 60, 8) + 'px';
+  placeTipEl(px, py);
 }
 
 function setDivisionState(name, state) {
@@ -270,11 +267,7 @@ function bindHoverTips() {
   const show = (e, html) => {
     divTipEl.hidden = false;
     divTipEl.innerHTML = html;
-    divTipEl.style.maxHeight = '40vh';
-    divTipEl.style.overflowY = 'auto';
-    const w = container.clientWidth;
-    divTipEl.style.left = Math.min(e.point.x + 14, w - 200) + 'px';
-    divTipEl.style.top = Math.max(e.point.y - 60, 8) + 'px';
+    placeTipEl(e.point.x, e.point.y);
   };
   const bindSeries = (layerId, getData, htmlFn) => {
     map.on('mouseenter', layerId, e => {
@@ -285,9 +278,7 @@ function bindHoverTips() {
     });
     map.on('mousemove', layerId, e => {
       if (divTipEl.hidden) return;
-      const w = container.clientWidth;
-      divTipEl.style.left = Math.min(e.point.x + 14, w - 200) + 'px';
-      divTipEl.style.top = Math.max(e.point.y - 60, 8) + 'px';
+      placeTipEl(e.point.x, e.point.y);
     });
     map.on('mouseleave', layerId, () => {
       map.getCanvas().style.cursor = '';
@@ -947,9 +938,7 @@ export function selectEvent(event) {
       const pt = map.project(lngLat);
       divTipEl.hidden = false;
       divTipEl.innerHTML = eventTipHtml(event);
-      const w = container.clientWidth;
-      divTipEl.style.left = Math.min(pt.x + 18, w - 200) + 'px';
-      divTipEl.style.top = Math.max(pt.y - 60, 8) + 'px';
+      placeTipEl(pt.x, pt.y);
     }, 620);
   }
 }
