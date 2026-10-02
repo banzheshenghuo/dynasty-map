@@ -548,7 +548,8 @@ function buildLayers() {
         'symbol-spacing': 110,
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-        'icon-rotation-alignment': 'line',
+        // icon-rotation-alignment 只接受 map|viewport|auto，非法值会拒载整个 style；
+        // 缺省 auto 在 symbol-placement:'line' 下即沿线旋转
       },
       paint: { 'icon-opacity': 0.9 },
     },
