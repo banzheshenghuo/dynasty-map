@@ -40,7 +40,7 @@ GitHub Pages（/dynasty-map/）
 - **数据基线**：40 断面（商·前1600 → 清·1911）、16 时代、108 事件（**前1600 起**：商汤灭夏/盘庚迁殷/武丁伐鬼方/帝辛征人方 4 条上古事件来自本地源 `tools/sources/events-ancient.json`，与上游事件合并去重）；38 断面含政区层共 11,821 个政区要素；商代两断面含据点层（kind=都城/都邑/方国/部族/遗址，部族带可选 `stance` 敌国|邻居|时叛时服，前1600 为考古共识口径、前1200 为谭图读图口径，界外部族 9 个）；**路线层契约 `routesFile`**（LineString，kind=迁都|征伐，本期商代两断面：商都五迁 + 汤伐夏桀，走向为示意非路径复原）；现代底图三件套（国界/省界/邻国）+ 现代地名点位（省/市/县驻地 3237 点，DataV 递归提取）；`data/` 约 19MB。
 - **功能基线**：胶片条时间轴（等距节点横向滚动带，‹▶›步进/播放/空格/←→，自动回中）；多政权分色（weak 淡显）；政区界开关 + 悬浮详情 + 字号设置；据点层（楷体标注 + kind 分级符号 + 部族敌友三档符号 + 今地名 tooltip + 标签四向错位）；路线层（政权色虚线 + 沿线箭头 + 悬浮口径 tooltip）；王朝名称大字（政权形心 + 政权色楷体）；现代地名开关（主开关 + 省/市/县三级配置，缩放分层）；五德调色（秦玄黑/宋赤/明赤，汉唐本契合，商元清保持并注明原因）；切换断面保留视野；大事年表三方联动；`?y=` 直达；移动端抽屉式侧栏。
 - **渲染基线**：MapLibre GL JS v6（WebGL2/WebGL1 兜底）替代 ECharts geo（Canvas 2D)；`vite.config.js` 内置 worker 资产发射插件 + `optimizeDeps.exclude`（vite 不跟随 maplibre 的 worker `new URL` 引用，缺此配置地图空白）；`src/map.js` 对外接口不变，`main.js`/`index.html` 零改动。
-- **已知问题**：~~滚轮缩放不绕指针~~（迁移 MapLibre 后原生绕指针缩放，已解决）；ZCode IAB webview 内合成鼠标事件不触发 MapLibre 图层交互、`--disable-gpu` 无头 Chrome 无 WebGL2——浏览器实测需 GPU 开启的无头 Chrome（视觉）+ DOM/网络断言（evaluate）互证（见 [商代叙事增强归档](doc/archive/2026-10-02-商代叙事增强.md)）。
+- **已知问题**：~~滚轮缩放不绕指针~~（迁移 MapLibre 后原生绕指针缩放，已解决）；浏览器实测方法学：MapLibre style 校验错误**只进 console**（页面 UI 照常、地图空白，aeb4547 全端空白事故即此）——上线验收必须 CDP 抓 console + `Page.captureScreenshot` 真帧断言（`--screenshot` 命令行拍 WebGL canvas 恒为空帧、`--disable-gpu` 无 WebGL2、IAB 合成鼠标事件不触发图层交互、视觉模型读图有迎合倾向）；Pages 边缘缓存 `max-age=600`——部署后线上验证先 curl index.html 核对 bundle hash（见 [商代叙事增强归档](doc/archive/2026-10-02-商代叙事增强.md)）。
 - **管线教训**：build 产物校验要显式看退出码（勿接 `| grep`）；事件源拉取已带镜像+重试。
 - **上古二期（在途）**：夏/西周/春秋/战国 7 断面待补，上古事件继续往 `events-ancient.json` 增补即可（管线已就绪，[在途方案](doc/active/2026-09-30-二期上古断面.md)）。
 
