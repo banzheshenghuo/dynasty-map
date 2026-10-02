@@ -42,6 +42,9 @@ const divCache = new Map();
 // 断面据点层（都城/都邑/方国/遗址）：懒加载同政区层，失败静默降级
 let placeGeoFeatures = [];
 const placeCache = new Map();
+// 断面路线层（迁都/征伐示意线）：懒加载同据点层，失败静默降级
+let routeGeoFeatures = [];
+const routeCache = new Map();
 // 现代地名点位（省/市/县驻地）：随「现代地名」开关懒加载，按缩放分层显示
 let modernPlacesGeo = null;
 let modernPlacesVisible = false;
@@ -100,6 +103,20 @@ function fetchPlaces(snap) {
     );
   }
   return placeCache.get(snap.id);
+}
+
+function fetchRoutes(snap) {
+  if (!snap.routesFile) return Promise.resolve(null);
+  if (!routeCache.has(snap.id)) {
+    routeCache.set(
+      snap.id,
+      fetchJson(snap.routesFile).catch((e) => {
+        console.warn(`路线图层加载失败，本断面不显示路线: ${snap.routesFile}`, e);
+        return null;
+      })
+    );
+  }
+  return routeCache.get(snap.id);
 }
 
 // ── 政区名注记：形心定位 + symbol 碰撞避让 ──────────────────
@@ -242,7 +259,11 @@ const eventTipHtml = e => `<div class="tip-year">${e.yearLabel}</div>
   <div class="tip-desc">${e.description}</div>`;
 
 const placeTipHtml = d => `<div class="tip-title">${d.name}</div>
-  <div class="tip-loc">${d.kind} · 今${d.today}</div>
+  <div class="tip-loc">${d.kind}${d.stance ? `（${d.stance}）` : ''} · 今${d.today}</div>
+  ${d.note ? `<div class="tip-desc">${d.note}</div>` : ''}`;
+
+const routeTipHtml = d => `<div class="tip-title">${d.name}</div>
+  <div class="tip-loc">${d.kind} · 示意路线</div>
   ${d.note ? `<div class="tip-desc">${d.note}</div>` : ''}`;
 
 function bindHoverTips() {
@@ -255,12 +276,12 @@ function bindHoverTips() {
     divTipEl.style.left = Math.min(e.point.x + 14, w - 200) + 'px';
     divTipEl.style.top = Math.max(e.point.y - 60, 8) + 'px';
   };
-  const bindSeries = (layerId, getData) => {
+  const bindSeries = (layerId, getData, htmlFn) => {
     map.on('mouseenter', layerId, e => {
       const d = getData(e);
       if (!d) return;
       map.getCanvas().style.cursor = 'pointer';
-      show(e, layerId === 'events' ? eventTipHtml(d) : placeTipHtml(d));
+      show(e, htmlFn(d));
     });
     map.on('mousemove', layerId, e => {
       if (divTipEl.hidden) return;
@@ -278,9 +299,11 @@ function bindHoverTips() {
     const raw = e.features?.[0]?.properties?.__event;
     if (!raw) return null;
     try { return JSON.parse(raw); } catch { return null; }
-  });
+  }, eventTipHtml);
   // 据点层（属性全为扁平字符串，无序列化问题）
-  bindSeries('places', e => e.features?.[0]?.properties || null);
+  bindSeries('places', e => e.features?.[0]?.properties || null, placeTipHtml);
+  // 路线层（命中挂在透明加宽的 hit 线上）
+  bindSeries('routes-hit', e => e.features?.[0]?.properties || null, routeTipHtml);
 }
 
 function bindDivisionHover() {
@@ -316,7 +339,7 @@ function bindDivisionHover() {
   });
   map.on('click', e => {
     const hits = map.queryRenderedFeatures(e.point, {
-      layers: ['divisions-fill', 'events', 'places'].filter(id => map.getLayer(id)),
+      layers: ['divisions-fill', 'events', 'places', 'routes-hit'].filter(id => map.getLayer(id)),
     });
     if (!hits.length) {
       setHoverDivision(null);
@@ -351,19 +374,30 @@ function applyPlaceIcons(color) {
     capital: { r: 4.5, fill: color, stroke: PAPER, sw: 1.2, shape: 'circle' },
     city: { r: 3.5, fill: rgba(color, 0.90), sw: 0, shape: 'circle' },
     state: { r: 3.5, fill: rgba(color, 0.75), sw: 0, shape: 'diamond' },
+    // 部族三档：邻居淡空心（缺省）、敌国实心醒目、时叛时服浓描边空心
     tribe: { r: 2.75, fill: 'rgba(0,0,0,0)', stroke: rgba(color, 0.55), sw: 1.4, shape: 'diamond' },
+    'tribe-foe': { r: 3.1, fill: rgba(color, 0.88), sw: 0, shape: 'diamond' },
+    'tribe-rebel': { r: 3, fill: 'rgba(0,0,0,0)', stroke: rgba(color, 0.9), sw: 1.7, shape: 'diamond' },
     site: { r: 3, fill: 'rgba(0,0,0,0)', stroke: rgba(color, 0.85), sw: 1.6, shape: 'circle' },
     ring: { r: 8.5, fill: 'rgba(0,0,0,0)', stroke: rgba(color, 0.55), sw: 1.4, shape: 'circle' },
+    // 路线沿线箭头：三角指向行进方向（symbol-placement:'line' 随切线旋转）
+    arrow: { r: 4.5, fill: rgba(color, 0.85), stroke: PAPER, sw: 1, shape: 'arrow' },
   };
   for (const [key, d] of Object.entries(defs)) {
     const s = d.r + d.sw + 3;
     const img = makeIcon(ctx => {
       if (d.shape === 'diamond') diamondPath(ctx, s, s, d.r);
-      else ctx.arc(s, s, d.r, 0, Math.PI * 2);
+      else if (d.shape === 'arrow') {
+        ctx.beginPath();
+        ctx.moveTo(s - d.r * 0.75, s - d.r * 0.85);
+        ctx.lineTo(s + d.r, s);
+        ctx.lineTo(s - d.r * 0.75, s + d.r * 0.85);
+        ctx.closePath();
+      } else ctx.arc(s, s, d.r, 0, Math.PI * 2);
       if (d.fill !== 'rgba(0,0,0,0)') { ctx.fillStyle = d.fill; ctx.fill(); }
       if (d.sw) { ctx.strokeStyle = d.stroke; ctx.lineWidth = d.sw; ctx.stroke(); }
     }, s * 2);
-    const name = `place-${key}`;
+    const name = key === 'arrow' ? 'route-arrow' : `place-${key}`;
     if (map.hasImage(name)) map.removeImage(name);
     map.addImage(name, img);
   }
@@ -492,6 +526,32 @@ function buildLayers() {
       id: 'modern-line', source: 'modern', type: 'line',
       paint: { 'line-color': MODERN_BORDER_ON, 'line-width': 1 },
     },
+    // 断面路线层（迁都/征伐示意线）：hit 层透明加宽供悬浮命中，虚线 + 沿线箭头
+    {
+      id: 'routes-hit', source: 'routes', type: 'line',
+      paint: { 'line-color': 'rgba(0,0,0,0)', 'line-width': 10 },
+    },
+    {
+      id: 'routes-line', source: 'routes', type: 'line',
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': 1.6,
+        'line-opacity': 0.8,
+        'line-dasharray': [2.5, 2],
+      },
+    },
+    {
+      id: 'routes-arrow', source: 'routes', type: 'symbol',
+      layout: {
+        'symbol-placement': 'line',
+        'icon-image': 'route-arrow',
+        'symbol-spacing': 110,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-rotation-alignment': 'line',
+      },
+      paint: { 'icon-opacity': 0.9 },
+    },
     // 现代地名三级（声明式分层 + 三级开关 visibility；初始隐藏随主开关开启）
     ...Object.entries(MP_LAYERS).map(([level, cfg]) => ({
       id: `modern-places-${level}`,
@@ -553,13 +613,18 @@ function buildLayers() {
       layout: { 'icon-image': 'place-ring', 'icon-allow-overlap': true, 'icon-ignore-placement': true },
     },
     // 断面据点层：符号分级 + 楷体标注，标注方位四向轮转错开密集区（都城恒取上方示尊）
+    // 部族按敌友分档：敌国实心、时叛时服浓描边、邻居/缺省淡空心
     {
       id: 'places', source: 'places', type: 'symbol',
       layout: {
         'icon-image': [
           'match', ['get', 'kind'],
           '都城', 'place-capital', '都邑', 'place-city', '方国', 'place-state',
-          '部族', 'place-tribe', 'place-site',
+          '部族', [
+            'match', ['get', 'stance'],
+            '敌国', 'place-tribe-foe', '时叛时服', 'place-tribe-rebel', 'place-tribe',
+          ],
+          'place-site',
         ],
         'text-field': ['get', 'name'],
         'text-font': [KAITI_STACK],
@@ -638,6 +703,7 @@ export async function initMap(el, handlers) {
       ...source('div-labels'),
       ...source('regime-labels'),
       ...source('places'),
+      ...source('routes'),
       ...source('events'),
     },
     layers: buildLayers(),
@@ -737,17 +803,28 @@ function toPlaceFeatures(features) {
       geometry: { type: 'Point', coordinates: f.geometry.coordinates },
       properties: {
         name: p.name, kind: p.kind, today: p.today, note: p.note || '',
+        stance: p.stance || '',
         anchor: p.kind === '都城' ? 'top' : LABEL_POS[i % LABEL_POS.length],
       },
     };
   });
 }
 
+// 路线要素：政权色注入 properties（paint 读 color，换断面只换数据，同 regime 模式）
+function toRouteFeatures(features, color) {
+  return (features || []).map(f => ({
+    type: 'Feature',
+    geometry: f.geometry,
+    properties: { name: f.properties.name, kind: f.properties.kind, note: f.properties.note || '', color },
+  }));
+}
+
 export async function showSnapshot(snap, events, view = {}) {
   const geo = await fetchGeo(snap);
-  const [divisions, places] = await Promise.all([fetchDivisions(snap), fetchPlaces(snap)]);
+  const [divisions, places, routes] = await Promise.all([fetchDivisions(snap), fetchPlaces(snap), fetchRoutes(snap)]);
   divisionGeo = divisions;
   placeGeoFeatures = places?.features || [];
+  routeGeoFeatures = routes?.features || [];
   const byName = new Map(snap.regimes.map(r => [r.name, r]));
   // 政权配色注入要素属性：paint 表达式恒定，换断面只换数据
   const regimeFc = {
@@ -800,6 +877,7 @@ export async function showSnapshot(snap, events, view = {}) {
     map.getSource('div-labels').setData({ type: 'FeatureCollection', features: divLabelData });
     map.getSource('regime-labels').setData({ type: 'FeatureCollection', features: regimeLabelData });
     map.getSource('places').setData({ type: 'FeatureCollection', features: toPlaceFeatures(placeGeoFeatures) });
+    map.getSource('routes').setData({ type: 'FeatureCollection', features: toRouteFeatures(routeGeoFeatures, primaryColor(snap)) });
     map.getSource('events').setData({
       type: 'FeatureCollection',
       features: events.map(toEventFeature),
@@ -880,6 +958,7 @@ export function preload(snap) {
   fetchGeo(snap).catch(() => {});
   fetchDivisions(snap);
   fetchPlaces(snap);
+  fetchRoutes(snap);
 }
 
 // ── 政区注记字号：设置面板调节，localStorage 持久化 ──────────

@@ -510,6 +510,9 @@ const eras = [];
 
 // ── 断面主循环 ──────────────────────────────────────────────
 const timelineSnapshots = [];
+// 路线层静态源（迁都/征伐，snapshot 键控；本期商代两断面，后续朝代在此增补）
+const ROUTES_SRC = readJson(`${SRC}hand-shang-routes.json`).routes;
+
 for (const snap of SNAPSHOTS) {
   const territoryFeats = [];
   const adminTerritories = [];
@@ -559,11 +562,25 @@ for (const snap of SNAPSHOTS) {
     };
     writeFileSync(`${ROOT}data/geo/${snap.id}-places.json`, JSON.stringify(placesFc));
   }
+  // 路线层（迁都/征伐，通用契约）：静态源按 snapshot 键控，有则产出断面文件
+  const snapRoutes = ROUTES_SRC.filter(r => r.snapshot === snap.id);
+  let routesFc = null;
+  if (snapRoutes.length) {
+    routesFc = {
+      type: 'FeatureCollection',
+      features: snapRoutes.map(r => ({
+        type: 'Feature',
+        properties: { name: r.name, kind: r.kind, note: r.note, layer: 'route' },
+        geometry: { type: 'LineString', coordinates: r.coordinates.map(([x, y]) => [round2(x), round2(y)]) },
+      })),
+    };
+    writeFileSync(`${ROOT}data/geo/${snap.id}-routes.json`, JSON.stringify(routesFc));
+  }
   writeFileSync(`${ROOT}data/geo/${snap.id}.json`, JSON.stringify({ type: 'FeatureCollection', features: territoryFeats }));
   if (div) writeFileSync(`${ROOT}data/geo/${snap.id}-div.json`, JSON.stringify(div));
   const nDiv = div ? div.features.length : 0;
   const size = (JSON.stringify(territoryFeats).length / 1024).toFixed(0);
-  console.log(`geo/${snap.id}.json  ${snap.label}  政权${territoryFeats.length}+政区${nDiv}+据点${placesFc ? placesFc.features.length : 0}  轮廓${size}KB`);
+  console.log(`geo/${snap.id}.json  ${snap.label}  政权${territoryFeats.length}+政区${nDiv}+据点${placesFc ? placesFc.features.length : 0}+路线${routesFc ? routesFc.features.length : 0}  轮廓${size}KB`);
   timelineSnapshots.push({
     id: snap.id, year: snap.year, era: snap.era, label: snap.label, note: snap.note,
     regimes: snap.territories.map(t => ({
@@ -572,6 +589,7 @@ for (const snap of SNAPSHOTS) {
     geoFile: `geo/${snap.id}.json`,
     ...(div ? { divisionsFile: `geo/${snap.id}-div.json` } : {}),
     ...(placesFc ? { placesFile: `geo/${snap.id}-places.json` } : {}),
+    ...(routesFc ? { routesFile: `geo/${snap.id}-routes.json` } : {}),
   });
 }
 
@@ -621,6 +639,16 @@ for (const [era, ids] of eraOfEvent) {
       });
     }
   }
+}
+// 上古本地事件源（上游无夏商周 dynasty 标签；era 直书断面 era，
+// 二期夏/西周/春秋/战国事件在此增补，不再改管线）
+for (const e of readJson(`${SRC}events-ancient.json`).events) {
+  if (seenTitles.has(e.title)) continue;
+  seenTitles.add(e.title);
+  events.push({
+    year: e.year, yearLabel: yearLabel(e.year), era: e.era, title: e.title,
+    description: e.description, location: e.location, tag: e.tag, sig: e.sig,
+  });
 }
 events.sort((a, b) => a.year - b.year);
 writeFileSync(`${ROOT}data/timeline.json`, JSON.stringify({

@@ -83,47 +83,47 @@
     },
     {
       "type": "Feature",
-      "properties": { "name": "土方", "kind": "部族", "today": "晋北—内蒙古河套", "note": "武丁长期征伐的北方强敌" },
+      "properties": { "name": "土方", "kind": "部族", "stance": "敌国", "today": "晋北—内蒙古河套", "note": "武丁长期征伐的北方强敌" },
       "geometry": { "type": "Point", "coordinates": [111.5, 39.8] }
     },
     {
       "type": "Feature",
-      "properties": { "name": "鬼方", "kind": "部族", "today": "陕北—晋西北", "note": "《周易》「高宗伐鬼方，三年克之」" },
+      "properties": { "name": "鬼方", "kind": "部族", "stance": "敌国", "today": "陕北—晋西北", "note": "《周易》「高宗伐鬼方，三年克之」" },
       "geometry": { "type": "Point", "coordinates": [110.3, 38.3] }
     },
     {
       "type": "Feature",
-      "properties": { "name": "羌方", "kind": "部族", "today": "甘肃陇西", "note": "西方强邻，卜辞「伐羌」记录最多" },
+      "properties": { "name": "羌方", "kind": "部族", "stance": "敌国", "today": "甘肃陇西", "note": "西方强邻，卜辞「伐羌」记录最多" },
       "geometry": { "type": "Point", "coordinates": [103.8, 35.3] }
     },
     {
       "type": "Feature",
-      "properties": { "name": "蜀", "kind": "部族", "today": "四川广汉", "note": "三星堆古蜀国，与商同期而风物迥异" },
+      "properties": { "name": "蜀", "kind": "部族", "stance": "邻居", "today": "四川广汉", "note": "三星堆古蜀国，与商同期而风物迥异" },
       "geometry": { "type": "Point", "coordinates": [104.25, 30.9] }
     },
     {
       "type": "Feature",
-      "properties": { "name": "楚", "kind": "部族", "today": "鄂西北", "note": "芈姓楚人此际居丹阳一带，尚为小邦" },
+      "properties": { "name": "楚", "kind": "部族", "stance": "邻居", "today": "鄂西北", "note": "芈姓楚人此际居丹阳一带，尚为小邦" },
       "geometry": { "type": "Point", "coordinates": [110.9, 32.4] }
     },
     {
       "type": "Feature",
-      "properties": { "name": "濮", "kind": "部族", "today": "江汉以南", "note": "江汉以南的濮人族群" },
+      "properties": { "name": "濮", "kind": "部族", "stance": "邻居", "today": "江汉以南", "note": "江汉以南的濮人族群" },
       "geometry": { "type": "Point", "coordinates": [111.3, 29.3] }
     },
     {
       "type": "Feature",
-      "properties": { "name": "淮夷", "kind": "部族", "today": "淮河中下游", "note": "淮河流域的夷人诸部" },
+      "properties": { "name": "淮夷", "kind": "部族", "stance": "时叛时服", "today": "淮河中下游", "note": "淮河流域的夷人诸部" },
       "geometry": { "type": "Point", "coordinates": [117.6, 33.2] }
     },
     {
       "type": "Feature",
-      "properties": { "name": "人方", "kind": "部族", "today": "鲁南—苏北", "note": "帝辛屡次大举征讨的东方方国" },
+      "properties": { "name": "人方", "kind": "部族", "stance": "敌国", "today": "鲁南—苏北", "note": "帝辛屡次大举征讨的东方方国" },
       "geometry": { "type": "Point", "coordinates": [118.5, 35.2] }
     },
     {
       "type": "Feature",
-      "properties": { "name": "莱夷", "kind": "部族", "today": "山东潍坊—青岛", "note": "胶东半岛的夷人" },
+      "properties": { "name": "莱夷", "kind": "部族", "stance": "邻居", "today": "山东潍坊—青岛", "note": "胶东半岛的夷人" },
       "geometry": { "type": "Point", "coordinates": [119.8, 36.9] }
     }
   ]

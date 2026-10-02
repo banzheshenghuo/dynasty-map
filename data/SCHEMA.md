@@ -13,6 +13,7 @@ data/
 ├── geo/s{id}.json         断面疆域面（多政权并立时多个 feature）
 ├── geo/s{id}-div.json     断面政区界
 ├── geo/s{id}-places.json  断面据点层（都邑/方国/遗址点位）
+├── geo/s{id}-routes.json  断面路线层（迁都/征伐示意线，可选）
 ├── geo/modern.json        现代国界（对照底图）
 ├── geo/provinces.json     现代省界
 ├── geo/neighbors.json     周边现代国界
@@ -30,7 +31,8 @@ data/
 - `eras[]`：时代分段（时间轴底色/聚合/侧栏简介），按 `from` 升序、相邻段
   `from == 前段 to`，首尾恰覆盖 `range`
 - `snapshots[]`：按 `year` 严格升序，不许重复年份
-- `events[]`：跨断面按上游朝代标签合并、按标题去重，按 `year` 升序
+- `events[]`：上游朝代标签事件 + 本地上古事件源（`tools/sources/events-ancient.json`）
+  合并、按标题去重，按 `year` 升序
 
 ### eras[] 每条
 
@@ -51,6 +53,8 @@ data/
   谭图本就不画政区）省略此字段即无政区层
 - `placesFile`：相对 `data/` 的据点文件指针，**可选**——断面据点层（都城/都邑/
   方国/遗址点位）；上古断面为主，任何断面可用
+- `routesFile`：相对 `data/` 的路线文件指针，**可选**——断面路线层
+  （迁都/征伐示意线）；本期商代两断面，任何断面可用
 
 ### events[] 每条
 
@@ -88,9 +92,20 @@ FeatureCollection，**Point** 几何（懒加载，加载失败静默降级，�
 - `properties.name`：据点名（如 殷 / 亳 / 盘龙城），断面内唯一
 - `properties.kind`：枚举 `都城 | 都邑 | 方国 | 部族 | 遗址`（渲染符号分级；
   部族=疆域之外的邻邦部族，更淡更小）
+- `properties.stance`：**可选**，仅部族——枚举 `敌国 | 邻居 | 时叛时服`
+  （与商王朝的敌友关系，渲染三档区分；缺省回落默认部族样式）
 - `properties.today`：今地名（如 河南安阳），tooltip 古今对照用
 - `properties.note`：一句话依据/说明
 - `properties.layer = "place"`；坐标 2 位小数
+
+## geo/s{id}-routes.json — 断面路线层
+
+FeatureCollection，**LineString** 几何（懒加载，加载失败静默降级，同据点层）：
+
+- `properties.name`：路线名（如 商都五迁），断面内唯一
+- `properties.kind`：枚举 `迁都 | 征伐`（渲染同为虚线+沿线箭头，语义分类保留）
+- `properties.note`：一句话依据/口径说明（tooltip 展示，地望争议须如实注明）
+- `properties.layer = "route"`；坐标 2 位小数；走向为示意，非路径复原
 
 ## 对照底图三件
 
@@ -118,7 +133,8 @@ FeatureCollection，**Point** 几何（省/市/县三级行政区驻地，随「
 前端把多个 FeatureCollection 按 source 分层渲染（MapLibre，2026-10 由 ECharts geo 迁移）：
 
 - 每类图层一个 GeoJSON source：`regime`（疆域）/ `divisions`（政区，`promoteId: "name"`）/
-  `modern` / `provinces` / `neighbors`（对照底图），点位层 `places` / `modern-places` / `events`
+  `modern` / `provinces` / `neighbors`（对照底图），点位层 `places` / `modern-places` / `events`，
+  线层 `routes`（路线）
 - 政权配色注入要素 `properties.color`（源自 timeline.json regimes，渲染层 paint 表达式读取）
 
 ## 渲染资源目录（非数据契约）

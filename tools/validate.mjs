@@ -94,6 +94,7 @@ for (const s of snapshots) {
     else {
       const places = JSON.parse(readFileSync(placesPath, 'utf8'));
       const KINDS = new Set(['都城', '都邑', '方国', '部族', '遗址']);
+      const STANCES = new Set(['敌国', '邻居', '时叛时服']);
       let bad = 0;
       const seen = new Set();
       for (const f of places.features || []) {
@@ -102,6 +103,8 @@ for (const s of snapshots) {
         if (!p.name || seen.has(p.name)) bad++, fail(`${s.id} 据点 name 缺失或重复: ${p.name}`);
         seen.add(p.name);
         if (!KINDS.has(p.kind)) fail(`${s.id}·${p.name} kind 非法: ${p.kind}`);
+        if (p.stance != null && !STANCES.has(p.stance)) fail(`${s.id}·${p.name} stance 非法: ${p.stance}`);
+        if (p.stance != null && p.kind !== '部族') fail(`${s.id}·${p.name} stance 仅部族可用`);
         if (p.layer !== 'place') fail(`${s.id}·${p.name} layer 应为 "place"`);
         if (f.geometry?.type !== 'Point') fail(`${s.id}·${p.name} 几何须为 Point`);
         if (typeof p.today !== 'string' || !p.today) fail(`${s.id}·${p.name} 缺 today 今地名`);
@@ -109,6 +112,31 @@ for (const s of snapshots) {
       }
       if (!places.features?.length) fail(`${s.id} 据点文件为空`);
       else if (!bad) ok(`${s.id} 据点层 ${places.features.length} 个（kind 合法、今地名齐全）`);
+    }
+  }
+
+  // routesFile 可选（路线层：迁都/征伐示意线）
+  if (s.routesFile != null) {
+    const routesPath = join(ROOT, 'data', s.routesFile);
+    if (!existsSync(routesPath)) fail(`${s.id} 路线文件不存在: ${s.routesFile}`);
+    else {
+      const routes = JSON.parse(readFileSync(routesPath, 'utf8'));
+      const RKINDS = new Set(['迁都', '征伐']);
+      let bad = 0;
+      for (const f of routes.features || []) {
+        const p = f.properties || {};
+        if (!p.name) bad++, fail(`${s.id} 路线缺 name`);
+        if (!RKINDS.has(p.kind)) fail(`${s.id}·${p.name} kind 非法: ${p.kind}`);
+        if (p.layer !== 'route') fail(`${s.id}·${p.name} layer 应为 "route"`);
+        if (typeof p.note !== 'string' || !p.note) fail(`${s.id}·${p.name} 缺 note 口径说明`);
+        if (f.geometry?.type !== 'LineString') fail(`${s.id}·${p.name} 几何须为 LineString`);
+        else if ((f.geometry.coordinates || []).length < 2) fail(`${s.id}·${p.name} 线坐标至少 2 点`);
+      }
+      const { bad: badCoord, n } = routes.features?.length ? coordCheck(routes) : { bad: 0, n: 0 };
+      if (badCoord) fail(`${s.id} 路线有 ${badCoord}/${n} 个坐标越界`);
+      else if (bad) fail(`${s.id} 路线层有非法要素`);
+      else if (routes.features?.length) ok(`${s.id} 路线层 ${routes.features.length} 条（kind 合法、口径注明）`);
+      else fail(`${s.id} 路线文件为空`);
     }
   }
 
